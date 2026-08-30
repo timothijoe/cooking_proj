@@ -87,6 +87,13 @@ preflight 只验证文件，不连接实体手。
 
 该工具同样没有 `--execute`；NPZ 必须包含它要求的 `joint_positions_rad` 字段。
 
+可以用 `.venv/bin/tianji-robot sim wuji-angle-bar` 在 MuJoCo 中制作并保存姿态，但当前面板
+的 **Send to Hand** 按钮仍引用旧环境和脚本路径，不要点击它控制真机。保存 NPZ 后退出
+面板，再使用上面的 `wuji-send-pose` 命令，并重新核对手性和序列号。
+
+右手轨迹不得从左手 20 关节输出做简单符号镜像。旧 `UNUSABLE_numeric_mirror` 数据禁止
+上机；`official_right_retarget_candidate` 也必须先完成单关节索引、正方向、零位和限位验证。
+
 ## 常见问题
 
 - `ERROR_BUSY`：另一个 SDK 或 ROS 进程占用同一 USB。先识别并正常停止占用者，不要盲目
