@@ -28,5 +28,6 @@ ROS 2 暂不包含在本阶段。模型、厂商 SDK、录制数据和运行输�
 真机入口默认不运动。任何实际运动都必须显式提供相应的执行参数，并在设备旁完成
 急停、空间和反馈检查。
 
-进一步说明见 [快速开始](docs/quickstart.md)、[能力清单](docs/capabilities.md)和
+实际操作从[使用教程](tutorials/README.md)开始。Agent 和维护者查阅
+[开发知识库](docs/agent/README.md)；项目总览另见[能力清单](docs/capabilities.md)和
 [安全边界](docs/safety.md)。
