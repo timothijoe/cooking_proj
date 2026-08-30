@@ -80,5 +80,10 @@
 运动。切菜、连续阻抗、轨迹进入和联合双臂属于更高风险实验，不应从本入门示例直接推导
 参数；不要复制旧项目中的 IP、初始角度、工作空间或切菜参数直接运行。
 
+完整命令分别见[切菜与位置实验](hardware/tianji_chopping.md)、
+[键盘与手柄点动](hardware/tianji_teleoperation.md)、
+[NPZ 轨迹播放](hardware/tianji_trajectory_playback.md)和
+[双臂与 Wuji 联合回放](hardware/combined_playback.md)。
+
 所有 trace CSV 写入 `local/data/recordings/`。异常时先停止命令并使用物理急停；键盘空格或
 deadman 只是软件停止，不是急停替代品。
