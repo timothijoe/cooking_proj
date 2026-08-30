@@ -42,29 +42,62 @@
 5. 先列出项目实际具备的能力、资源依赖、已验证状态和未验证状态，再开始分类。
 
 【目标目录】
+README.md                              # 项目首页和最短入口
 docs/
+├── README.md                           # 全部开发文档总目录
+├── capabilities.md                     # 项目能力总表
+├── quickstart.md                       # 最短开发环境入口
+├── safety.md                           # 全局安全与副作用边界
+├── design/
+│   ├── README.md                       # 设计文档索引
+│   ├── documentation-system.md         # 文档体系和维护规则
+│   └── <cross-domain-design>.md         # 跨领域长期设计
 └── agent/
-    ├── README.md
-    ├── <domain_1>/
-    │   ├── README.md
-    │   ├── charter.md
-    │   ├── current.md
-    │   ├── chronicles/
-    │   ├── evolution/
-    │   └── decisions/
-    ├── <domain_2>/
-    │   └── ...同样结构
+    ├── README.md                       # Agent 知识库总入口
+    ├── <domain_1>/                     # 每个真实领域完整复制这一结构
+    │   ├── README.md                   # 领域导航
+    │   ├── charter.md                  # 长期总章程
+    │   ├── current.md                  # 当前摘要和纪传体索引
+    │   ├── chronicles/                 # 编年体：永久追加
+    │   │   ├── README.md               # 编年规则和时间索引
+    │   │   ├── YYYY-MM-DD-<stage>.md   # 一个已验证开发阶段
+    │   │   └── YYYY-MM-DD-<correction>.md # 后续勘误，不改旧记录
+    │   ├── evolution/                  # 纪传体：维护最新事实
+    │   │   ├── README.md               # 能力索引和维护说明
+    │   │   ├── <capability_1>.md        # 一项长期能力的当前全貌
+    │   │   └── <capability_2>.md
+    │   └── decisions/                  # 永久架构决定
+    │       ├── README.md               # 决定索引
+    │       ├── 001-<decision>.md
+    │       └── 002-<decision>.md
+    ├── <domain_2>/                     # README/charter/current/chronicles/
+    │   └── ...                         # evolution/decisions 与上面完全相同
     └── interfaces/
-        ├── README.md
-        └── <interface>.md
+        ├── README.md                   # 接口总索引
+        ├── <module-or-service>.md       # Python/API/服务接口
+        ├── cli.md                      # CLI 与子命令约定
+        ├── data-formats.md             # 数据结构、单位和版本
+        ├── local-resources.md           # 本地资源布局和解析规则
+        └── external-systems.md          # SDK/设备/外部服务边界
 
 tutorials/
-├── README.md
-├── environment_setup.md
-└── <按真实任务拆分的教程>.md
+├── README.md                            # 人类教程总入口和阅读顺序
+├── environment_setup.md                # 环境安装与重建
+├── quickstart.md                        # 最短可运行案例
+├── <domain_1>.md                        # 一个领域的基本操作
+├── <task_1>.md                          # 一个具体人工任务
+├── <task_2>.md
+├── recording_and_replay.md              # 项目有录制能力时创建
+├── hardware_or_production.md            # 项目有真机/生产操作时创建
+└── troubleshooting.md                   # 常见问题、停止和恢复
+
+manifests/
+├── README.md                            # 资源清单的格式和恢复说明
+└── <resources>.yaml                     # 资源元数据，不存大文件本体
 
 领域名称必须来自“项目领域”参数。例如 simulation、teleoperation、retargeting、real_robot、
-data_pipeline、frontend、backend、deployment；不要强行为不存在的领域写空文档。
+data_pipeline、frontend、backend、deployment；不要强行为不存在的领域写空文档。尖括号表示
+按项目实际名称替换并可重复创建，不是最终文件名；带“项目有……时创建”的文件按能力选用。
 
 【各类文档的强制职责】
 1. docs/agent/README.md
