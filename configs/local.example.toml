@@ -1,0 +1,11 @@
+[paths]
+asset_root = "local/assets"
+vendor_root = "local/vendor"
+data_root = "local/data"
+output_root = "local/outputs"
+
+[tianji]
+controller_ip = "192.168.1.190"
+
+[safety]
+execute = false

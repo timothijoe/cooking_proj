@@ -36,3 +36,10 @@ dist/
 build/
 coverage/
 .coverage
+
+# Project-local assets, SDKs, recordings, and outputs
+local/
+
+# Project virtual environments
+.venv/
+.venv-*/
