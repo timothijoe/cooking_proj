@@ -1,0 +1,23 @@
+schema_version: 1
+root: local
+resources:
+  - id: simulation-assets
+    path: assets/robot_assets
+    tracked: false
+    purpose: MuJoCo scenes, Wuji models, meshes, and textures
+  - id: tianji-models
+    path: assets/MarvinCCS
+    tracked: false
+    purpose: Tianji model assets; redistribution permission must be confirmed
+  - id: tianji-python-sdk
+    path: vendor/SDK_PYTHON
+    tracked: false
+    purpose: vendor Python SDK and native libraries
+  - id: tianji-sdk-support
+    path: vendor/tianji_test
+    tracked: false
+    purpose: kinematics configuration and legacy vendor support files
+  - id: recordings
+    path: data/recordings
+    tracked: false
+    purpose: MCAP, NPZ, CSV, video, and experiment recordings

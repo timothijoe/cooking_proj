@@ -1,0 +1,31 @@
+schema_version: 1
+source: tianji_robotic_project/develop_13_kinematic_branch working tree
+groups:
+  twin_sim:
+    old: src/twin_sim
+    new: packages/cooking_simulation/src/twin_sim
+    status: migrated
+    excluded: [ros2_bridge.py]
+  wuji_runtime:
+    old: src/tianji_robotics
+    new: packages/wuji_hand/src/tianji_robotics
+    status: migrated-transitional-namespace
+  tianji_experiments:
+    old: real_robot_debug
+    new: packages/tianji_arm/src/tianji_arm/experiments
+    status: migrated
+  cross_device:
+    old: real_robot_debug/dual_arm_hand_*.py
+    new: packages/cooking_workflows/src/cooking_workflows
+    status: migrated
+  wuji_hardware_tools:
+    old: scripts/*.py
+    new: packages/wuji_hand/src/wuji_hand/tools
+    status: migrated
+  local_assets:
+    old: [robot_assets, MarvinCCS, SDK_PYTHON, test, recordings]
+    new: local
+    status: copied-and-gitignored
+  ros2:
+    old: ros2_ws
+    status: deferred

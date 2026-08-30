@@ -43,3 +43,12 @@ local/
 # Project virtual environments
 .venv/
 .venv-*/
+
+# Large or machine-specific artifacts (keep approved tiny fixtures under tests/fixtures)
+*.mcap
+*.npz
+*.zip
+*.dll
+*.so
+*.csv
+!tests/fixtures/**

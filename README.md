@@ -1,15 +1,32 @@
-![厨房杂物抽屉](assets/kitchen-drawer.png)
+# Tianji Cooking
 
-# 厨房杂物抽屉
+轻量化的 Tianji 双臂与 Wuji Hand 烹饪机器人工作区。
 
-这里不是什么正经项目，只是一个用来堆放厨房边角料的小抽屉。
-`main` 分支里大多是不太重要、但又懒得删掉的东西。
+当前整理三条能力线：
 
-## 抽屉里可能有什么
+- 双臂、灵巧手与切菜任务的 MuJoCo 仿真；
+- Wuji Hand 数据处理、仿真、遥操作与真机工具；
+- Tianji 双臂轨迹、诊断、遥操作与真机实验。
 
-- 写到一半的菜谱碎片
-- 成功过一次、再也复刻不出的实验记录
-- 买菜时突然冒出来的临时想法
-- 一些与做饭有关，或者其实没什么关系的东西
+ROS 2 暂不包含在本阶段。模型、厂商 SDK、录制数据和运行输出统一放在被 Git
+忽略的 `local/`；仓库只保存代码、配置模板和资源清单。
 
-内容随缘更新，分类随缘整理。照着这里做饭的话，请自行判断火候。
+## 快速开始
+
+```bash
+./scripts/setup/create_env.sh
+.venv/bin/twin-sim --help
+.venv/bin/tianji-robot --help
+```
+
+真机工具使用独立环境：
+
+```bash
+./scripts/setup/create_hardware_env.sh
+```
+
+真机入口默认不运动。任何实际运动都必须显式提供相应的执行参数，并在设备旁完成
+急停、空间和反馈检查。
+
+进一步说明见 [快速开始](docs/quickstart.md)、[能力清单](docs/capabilities.md)和
+[安全边界](docs/safety.md)。

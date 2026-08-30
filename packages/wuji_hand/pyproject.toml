@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=75"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "cooking-wuji-hand"
+version = "0.1.0"
+requires-python = ">=3.12,<3.13"
+dependencies = ["cooking-robot-core", "numpy>=2,<3"]
+
+[project.optional-dependencies]
+simulation = ["mujoco==3.10.0"]
+data = ["mcap>=1.3,<2"]
+
+[project.scripts]
+tianji-robot = "tianji_robotics.cli:main"
+wuji-send-pose = "wuji_hand.tools.send_pose_to_wuji_hand:main"
+wuji-play-trajectory = "wuji_hand.tools.play_wuji_trajectory:main"
+wuji-reset = "wuji_hand.tools.reset_wuji_hand:main"
+wuji-reset-fast = "wuji_hand.tools.reset_wuji_hand_fast:main"
+wuji-half-fist = "wuji_hand.tools.half_fist_wuji_hand:main"
+wuji-half-fist-hold = "wuji_hand.tools.half_fist_wuji_hand_hold:main"
+wuji-index-mcp-test = "wuji_hand.tools.test_wuji_right_index_mcp:main"
