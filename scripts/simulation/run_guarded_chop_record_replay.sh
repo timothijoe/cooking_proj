@@ -9,9 +9,7 @@ if [[ ! -x "${TWIN_SIM}" ]]; then
   printf '%s\n' \
     "Missing executable: ${TWIN_SIM}" \
     "Install the simulation environment from ${REPO_ROOT}:" \
-    "  python3.12 -m venv .venv" \
-    "  .venv/bin/python -m pip install -r requirements-sim.lock" \
-    "  .venv/bin/python -m pip install -e ." >&2
+    "  ./scripts/setup/create_env.sh" >&2
   exit 1
 fi
 
