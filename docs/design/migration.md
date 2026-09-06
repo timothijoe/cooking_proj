@@ -52,7 +52,7 @@ tests/
 
 ## 迁移原则
 
-- 以 `/home/linux/september_folder/tianji_robotic_project` 当前工作区为最新来源，包括尚未提交的新开发文件。
+- 以 `~/august_folder/tianji_robotic_project` 的当前工作区为迁移参考，包括尚未提交的相关开发文件；不将机器绝对路径作为运行时配置。
 - 不复制旧 Git 历史、虚拟环境、ROS 构建产物、录制数据、压缩包、厂商二进制和大模型资产。
 - 所有现有真机脚本先迁移并分类；成熟度标记为稳定、实验中或尚未真机验证。
 - 遥操作覆盖 MuJoCo Xbox、Tianji 键盘/Xbox、Wuji 角度条和手套数据回放。
