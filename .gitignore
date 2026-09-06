@@ -44,6 +44,9 @@ local/
 .venv/
 .venv-*/
 
+# Agent worktrees
+.worktrees/
+
 # Large or machine-specific artifacts (keep approved tiny fixtures under tests/fixtures)
 *.mcap
 *.npz
