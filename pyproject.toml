@@ -16,6 +16,11 @@ teleop = []
 hardware = ["wujihandpy>=1.8,<2"]
 dev = ["pytest>=9,<10"]
 
+# This root project aggregates independently packaged code under packages/.
+# It intentionally ships no Python package of its own.
+[tool.setuptools]
+packages = []
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = [
