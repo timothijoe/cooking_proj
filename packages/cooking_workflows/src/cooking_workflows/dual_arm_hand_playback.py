@@ -43,7 +43,7 @@ if str(ROOT) not in sys.path:
 DEFAULT_SOURCE = ROOT / "recordings" / "recorded_hand_guarded_chop_200hz_official_right_retarget_candidate.npz"
 DEFAULT_KINE_CONFIG = ROOT / "test" / "ccs_m6_40.MvKDCfg"
 ROBOT_IP = "192.168.1.190"
-WUJI_SERIAL = "365939643134"
+WUJI_SERIAL = "344D345D3533"  # 当前实际设备 SN (2026-09-06)
 
 # ── 关节阻抗参数 ──
 DEFAULT_JOINT_K = (8.0, 8.0, 8.0, 4.0, 2.0, 1.5, 1.0)

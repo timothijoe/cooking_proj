@@ -2,11 +2,11 @@
 """将单帧 Wuji 手姿态从 NPZ 文件发送到真实机械手。
 
 使用方法:
-    .venv-wujihand/bin/python scripts/send_pose_to_wuji_hand.py \\
+    .venv-hardware/bin/wuji-send-pose \\
         /tmp/wuji_pose_left_20260823_123456.npz
 
-    .venv-wujihand/bin/python scripts/send_pose_to_wuji_hand.py \\
-        /tmp/wuji_pose_left.npz --serial-number 365939643134 --ramp 2.0 --hold 3.0
+    .venv-hardware/bin/wuji-send-pose \\
+        /tmp/wuji_pose_left.npz --serial-number 344D345D3533 --ramp 2.0 --hold 3.0
 
 安全:
     - 错误码非零时拒绝执行（先运行 reset 脚本排查）
@@ -23,7 +23,7 @@ import time
 import numpy as np
 from wujihandpy import Hand
 
-DEFAULT_SERIAL = "365939643134"
+DEFAULT_SERIAL = "344D345D3533"  # 当前实际设备 SN（2026-09-06 从 USB 枚举读取）
 MARGIN = 0.02  # rad, 限位安全余量
 
 FINGER_NAMES = ["拇指", "食指", "中指", "无名指", "小指"]

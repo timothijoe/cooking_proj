@@ -27,13 +27,13 @@
 # 只控制手
 .venv-hardware/bin/python -m cooking_workflows.dual_arm_hand_batch_stream \
   --source-npz local/data/recordings/trajectory.npz \
-  --wuji-serial 365939643134 \
+  --wuji-serial 344D345D3533 \
   --execute --hand-only --entry-duration-s 15 --speed-scale 0.05
 
 # 双臂与手联合
 .venv-hardware/bin/python -m cooking_workflows.dual_arm_hand_batch_stream \
   --source-npz local/data/recordings/trajectory.npz \
-  --robot-ip 192.168.1.190 --wuji-serial 365939643134 \
+  --robot-ip 192.168.1.190 --wuji-serial 344D345D3533 \
   --execute --entry-duration-s 15 --speed-scale 0.05
 ```
 
@@ -54,7 +54,7 @@
 # 真机；仅在需要复现旧 Concise API 流程时使用
 .venv-hardware/bin/python -m cooking_workflows.dual_arm_hand_playback \
   --source-npz local/data/recordings/trajectory.npz \
-  --robot-ip 192.168.1.190 --wuji-serial 365939643134 \
+  --robot-ip 192.168.1.190 --wuji-serial 344D345D3533 \
   --execute --entry-duration-s 15 --speed-scale 0.05 \
   --no-keep-enabled
 ```

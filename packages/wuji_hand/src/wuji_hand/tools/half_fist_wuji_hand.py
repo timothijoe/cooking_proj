@@ -17,7 +17,7 @@ import time
 import numpy as np
 from wujihandpy import Hand
 
-DEFAULT_SERIAL = "365939643134"
+DEFAULT_SERIAL = "344D345D3533"  # 当前实际设备 SN (2026-09-06)
 FINGER_NAMES = ["拇指", "食指", "中指", "无名指", "小指"]
 
 # 半握拳目标 (rad)：五指自然弯曲，约全握拳的 50%

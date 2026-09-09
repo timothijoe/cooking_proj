@@ -41,7 +41,7 @@ from robot_core.paths import local_root
 ROOT = local_root()
 SOURCE = ROOT / "recordings" / "recorded_hand_guarded_chop_200hz_official_right_retarget_candidate.npz"
 ROBOT_IP = "192.168.1.190"
-WUJI_SERIAL = "365939643134"
+WUJI_SERIAL = "344D345D3533"  # 当前实际设备 SN (2026-09-06)
 JOINT_K = [8.0, 8.0, 8.0, 4.0, 2.0, 1.5, 1.0]
 JOINT_D = [0.8, 0.8, 0.8, 0.6, 0.4, 0.3, 0.2]
 

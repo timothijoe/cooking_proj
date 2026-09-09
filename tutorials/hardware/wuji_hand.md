@@ -1,7 +1,16 @@
-# Wuji Hand 真机操作
+# Wuji Hand 真机操作（当前最新版）
 
-本文迁移自旧项目 Wuji SDK 操作手册。旧设备记录为左手、USB 序列号 `365939643134`、
-产品序列号 `LQSQJR.260616.005`；运行前必须读取当前设备身份，不能假设仍是这只手。
+本文记录当前（2026-09-06 现场验证）设备状态与可用工具：
+
+- **USB 序列号 (SN)**: `344D345D3533`
+- **产品序列号**: `LQSQJL.260509.005`
+- **固件版本**: 2113930243（hex `0x7E000403`）
+- **Handedness**: 0（左手）
+- **关节错误码**: 全 0
+- **温度**: max ≈ 55°C（正常）
+
+> 注意：之前文档记录的旧设备 SN `365939643134` 已不再匹配当前硬件。运行任何
+> Wuji 工具前务必用下面的只读命令读取当前设备身份，不要假设仍是旧手。
 
 重要：除 `hand_only_stream --execute` 和 `wuji-index-mcp-test --execute` 外，多个 Wuji 工具
 没有 `--execute` 安全门；直接运行 `wuji-reset`、`wuji-half-fist`、`wuji-send-pose` 或
@@ -15,13 +24,13 @@ ls -l /dev/ttyACM0
 .venv-hardware/bin/python -c "
 from wujihandpy import Hand
 import numpy as np
-hand = Hand(serial_number='365939643134')
+hand = Hand(serial_number='344D345D3533')
 print('SN:', hand.get_product_sn())
 print('FW:', hand.get_firmware_version())
 print('Handedness:', hand.get_handedness())
 print('Errors:', np.asarray(hand.read_joint_error_code()))
 print('Temp max:', np.asarray(hand.read_joint_temperature(), dtype=float).max())
-print('Positions:', np.asarray(hand.read_joint_actual_position(), dtype=float))
+print('Positions:', np.asarray(hand.read_joint_actual_position(), dtype=float).reshape(5,4).round(4))
 "
 ```
 
@@ -42,10 +51,10 @@ preflight 只验证文件，不连接实体手。
 
 ```bash
 # 1 秒缓入
-.venv-hardware/bin/wuji-reset --serial-number 365939643134 --ramp 1.0
+.venv-hardware/bin/wuji-reset --serial-number 344D345D3533 --ramp 1.0
 
 # 0.8 秒快速恢复
-.venv-hardware/bin/wuji-reset-fast --serial-number 365939643134 --ramp 0.8
+.venv-hardware/bin/wuji-reset-fast --serial-number 344D345D3533 --ramp 0.8
 ```
 
 快速恢复会从当前姿态插值到零位，结束后去使能。它不是物理急停；若手指已经机械卡死，
@@ -55,10 +64,10 @@ preflight 只验证文件，不连接实体手。
 
 ```bash
 # 半握拳后自动恢复张开
-.venv-hardware/bin/wuji-half-fist --serial-number 365939643134 --ramp 3 --hold 5
+.venv-hardware/bin/wuji-half-fist --serial-number 344D345D3533 --ramp 3 --hold 5
 
 # 半握拳并保持；这是高风险入口
-.venv-hardware/bin/wuji-half-fist-hold --serial-number 365939643134 --ramp 3 --hold 10
+.venv-hardware/bin/wuji-half-fist-hold --serial-number 344D345D3533 --ramp 3 --hold 10
 ```
 
 保持版本可能在程序退出后仍保持使能。观察完立即用 `wuji-reset-fast` 恢复，并确认实际状态。
@@ -70,7 +79,7 @@ preflight 只验证文件，不连接实体手。
 ```bash
 .venv-hardware/bin/wuji-play-trajectory \
   local/data/recordings/trajectory.npz \
-  --serial-number 365939643134 \
+  --serial-number 344D345D3533 \
   --speed 0.1 --ramp 5 --hold 2
 ```
 
@@ -82,14 +91,26 @@ preflight 只验证文件，不连接实体手。
 ```bash
 .venv-hardware/bin/wuji-send-pose \
   local/data/recordings/pose.npz \
-  --serial-number 365939643134 --ramp 3 --hold 2
+  --serial-number 344D345D3533 --ramp 3 --hold 2
 ```
 
 该工具同样没有 `--execute`；NPZ 必须包含它要求的 `joint_positions_rad` 字段。
+`packages/wuji_hand/src/wuji_hand/tools/send_pose_to_wuji_hand.py` 内的默认序列号已更新为
+当前设备的 `344D345D3533`，不传 `--serial-number` 也会自动使用该值。
 
-可以用 `.venv/bin/tianji-robot sim wuji-angle-bar` 在 MuJoCo 中制作并保存姿态，但当前面板
-的 **Send to Hand** 按钮仍引用旧环境和脚本路径，不要点击它控制真机。保存 NPZ 后退出
-面板，再使用上面的 `wuji-send-pose` 命令，并重新核对手性和序列号。
+## 角度条面板 Send to Hand 按钮（已可用）
+
+```bash
+.venv/bin/tianji-robot sim wuji-angle-bar --hand left
+```
+
+- 面板 **Send to Hand** 按钮的路径逻辑已修复，可直接控制真机。
+- 点击后：保存当前滑条姿态为临时 NPZ → 弹出确认对话框 → 调用
+  `wuji_hand.tools.send_pose_to_wuji_hand` 使能、缓入 2s、保持 3s、自动去使能。
+- 若提示 `❌ Send to Hand: venv or script not found`，说明 repo 根目录的
+  `.venv-hardware` 或包内 send-pose 工具路径不对，按上面代码核对后重启面板。
+- 也可不点按钮，先在面板里调好姿态并 **Save Pose** 保存 NPZ，再退出面板用上面的
+  `wuji-send-pose` 命令发送。
 
 右手轨迹不得从左手 20 关节输出做简单符号镜像。旧 `UNUSABLE_numeric_mirror` 数据禁止
 上机；`official_right_retarget_candidate` 也必须先完成单关节索引、正方向、零位和限位验证。
@@ -101,3 +122,5 @@ preflight 只验证文件，不连接实体手。
 - 错误码非零：记录错误码并按设备手册排查；不要用反复 reset 掩盖机械卡碰。
 - SDK 与 ROS 不能同时拥有设备。本项目 ROS 2 当前暂缓。
 - 温度过高：停止使用并等待冷却，不能靠降低速度继续硬撑。
+- **手没动但提示成功**：检查 SDK 日志 `/home/zhoutong/.wuji/log/*.log`，典型原因是
+  `No device found with specified ... serial number` —— 用当前设备 SN（而非旧值）重新连接。

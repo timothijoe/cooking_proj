@@ -15,7 +15,7 @@ import time
 import numpy as np
 from wujihandpy import Hand
 
-DEFAULT_SERIAL = "365939643134"
+DEFAULT_SERIAL = "344D345D3533"  # 当前实际设备 SN (2026-09-06)
 
 
 def main():

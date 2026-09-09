@@ -58,7 +58,7 @@
 # 真机
 .venv-hardware/bin/python -m wuji_hand.tools.hand_only_stream \
   --source-npz local/data/recordings/trajectory.npz \
-  --wuji-serial 365939643134 \
+  --wuji-serial 344D345D3533 \
   --speed-scale 0.1 --entry-duration-s 5 --execute
 ```
 
@@ -83,6 +83,23 @@
 |---|---|---|
 | `dual_arm_hand_batch_stream` | 默认离线；`--execute` 控制双臂/手 | [联合回放](combined_playback.md) |
 | `dual_arm_hand_playback` | 旧 Concise API；默认离线；`--execute` 控制设备 | [联合回放](combined_playback.md) |
+
+## 传感器
+
+| 脚本 | 行为 | 教程 |
+|---|---|---|
+| `sensor_uart_stream.py` | 默认 dry-run；`--execute` 打开 `/dev/ttyUSB0`、发送采集指令并显示二维压力热力图 | [UART 压力传感器](sensor_uart_stream.md) |
+
+当前现场观察可使用下列命令；`--heatmap-vmax 2` 是临时显示上限，并非量程：
+
+```bash
+.venv-hardware/bin/python sensor_uart_stream.py \
+  --execute --port /dev/ttyUSB0 --baudrate 115200 \
+  --heatmap-vmin 0 --heatmap-vmax 2
+```
+
+在运行该命令的终端按 `Ctrl+C` 停止采集。已知传感器最大量程后，应将 2 替换为量程值，
+以保证不同时刻的颜色可以直接比较。
 
 ## 不应直接执行的文件
 

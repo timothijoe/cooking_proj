@@ -38,7 +38,7 @@ import numpy as np
 from robot_core.paths import local_root
 ROOT = local_root()
 SOURCE = ROOT / "recordings" / "recorded_hand_guarded_chop_200hz_official_right_retarget_candidate.npz"
-WUJI_SERIAL = "365939643134"
+WUJI_SERIAL = "344D345D3533"  # 当前实际设备 SN (2026-09-06)
 
 # ── Wuji hand hardware limits (rad) ──
 HAND_LOWER = np.array([

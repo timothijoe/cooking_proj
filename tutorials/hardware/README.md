@@ -14,6 +14,7 @@
 6. [双臂与 Wuji Hand 联合回放](combined_playback.md)
 7. [全部真机实验入口总表](experiment_inventory.md)
 8. [Wuji 手套网络接入](wuji_glove_network.md)
+9. [二维压力传感器 UART 采集与热力图](sensor_uart_stream.md)
 
 风险分级：
 

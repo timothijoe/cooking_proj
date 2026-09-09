@@ -22,20 +22,22 @@ _SIDES = frozenset({"left", "right"})
 _FINGER_LABELS = ("Thumb", "Index", "Middle", "Ring", "Little")
 PANEL_SAFETY_TEXT = "MuJoCo-only simulation — does not command hardware."
 
-# Path to the wujihand venv python (for sending poses to the real hand)
-_WUJIHAND_PYTHON = os.path.join(
-    os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))),
-    ".venv-wujihand", "bin", "python",
-)
+# Repo root: packages/wuji_hand/src/tianji_robotics/simulation/local_angle_bar.py
+# -> up 6 levels = cooking_proj root.
+_PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(
+    os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))))
+
+
+# Path to the wujihand venv python (for sending poses to the real hand).
+# Hardware venv lives at the repo root (.venv-hardware), not inside the package.
+_WUJIHAND_PYTHON = os.path.join(_PROJECT_ROOT, ".venv-hardware", "bin", "python")
+# Send-pose tool lives inside the wuji_hand package.
 _SEND_POSE_SCRIPT = os.path.join(
-    os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))),
-    "scripts", "send_pose_to_wuji_hand.py",
+    _PROJECT_ROOT, "packages", "wuji_hand", "src",
+    "wuji_hand", "tools", "send_pose_to_wuji_hand.py",
 )
-# Default save directory for recordings
-_RECORDINGS_DIR = os.path.join(
-    os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))),
-    "recordings", "wuji",
-)
+# Default save directory for recordings at the repo root.
+_RECORDINGS_DIR = os.path.join(_PROJECT_ROOT, "recordings", "wuji")
 OPEN_TARGET_RAD = {
     # Explicit per-side poses, kept separate so a future handed model can
     # change one pose without silently changing the other.

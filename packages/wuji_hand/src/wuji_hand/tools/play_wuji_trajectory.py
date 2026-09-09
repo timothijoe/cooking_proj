@@ -21,7 +21,7 @@ import time
 import numpy as np
 from wujihandpy import Hand
 
-DEFAULT_SERIAL = "365939643134"
+DEFAULT_SERIAL = "344D345D3533"  # 当前实际设备 SN (2026-09-06)
 MARGIN = 0.02  # rad
 
 FINGER_NAMES = ["拇指", "食指", "中指", "无名指", "小指"]
