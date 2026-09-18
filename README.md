@@ -32,5 +32,7 @@ ROS 2 暂不包含在本阶段。模型、厂商 SDK、录制数据和运行输�
 [开发知识库](docs/agent/README.md)；项目总览另见[能力清单](docs/capabilities.md)和
 [安全边界](docs/safety.md)。
 
+土豆资产、分区触觉与 PPO 原型见[土豆触觉退手实验](tutorials/potato_tactile.md)，包含运行命令、视频导出和当前实验限制。
+
 希望在其他项目复用同一套整理方法时，复制
 [通用项目文档整理 Prompt](PROMPTS/documentation_organizer.md)并填写开头的项目参数。

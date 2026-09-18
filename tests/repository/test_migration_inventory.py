@@ -1,4 +1,5 @@
 from pathlib import Path
+import subprocess
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -41,8 +42,13 @@ def test_ros2_was_deferred():
 
 def test_no_trackable_file_is_larger_than_five_megabytes():
     oversized = []
-    for path in ROOT.rglob("*"):
-        if not path.is_file() or ".git" in path.parts or "local" in path.parts:
+    # Test versionable files, not ignored virtualenv wheels or local archives.
+    names = subprocess.check_output(
+        ["git", "ls-files", "--cached", "--others", "--exclude-standard", "-z"], cwd=ROOT
+    ).decode().split("\0")
+    for name in names:
+        path = ROOT / name
+        if not name or not path.is_file():
             continue
         if path.stat().st_size > 5 * 1024 * 1024:
             oversized.append(path.relative_to(ROOT))
