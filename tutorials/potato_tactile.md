@@ -1,4 +1,206 @@
-## 当前版本：连续 3 轮切菜倒手
+## 当前版本：每个接触位置支撑退腕 3 次，再移指
+
+新增 `--support-repeats 3`（支持 1/2/3，默认 1 保持旧版）。每个接触位置分三次小幅退腕，每次 40 个参考移动采样加 20 个支撑采样；指尖世界目标在整个支撑段固定。刀在该段对应做三次不切入土豆的浅行程。三次全部完成后，还必须满足实际角度 ≥80°和三指接触持续 60 ms，才允许移指；不再因第一次就达到角度而提前跳走。
+
+最终参数把支撑退腕总量设为 4 mm（每次约 1.33 mm），落指辅助退腕仍为 4 mm，两段合计与相邻指尖接触点 8 mm 的间距一致，避免轮间需要退回。轮间从上一轮真实控制终点平滑衔接，消除未重定向旧手形导致的调整。重复支撑模式下，禁止再屈曲的限制用于落指/按稳；进入下一轮的退腕支撑准备后允许关节随固定指尖几何调整，避免限制造成食指在下一支撑段开头补偿滑动。旧的单次模式不变。
+
+同一 PPO 的三个接触位置各完成三次支撑退腕，共九次；三轮均重新按稳。各支撑段三指世界位置偏移最大 0.956 mm，最小指尖法向载荷约 0.199 N，全段有接触，没有提前抬指。土豆全程最大位移 3.36 mm。这里是实际接触保持，不是把指尖或土豆焊死。零残差三轮位移 9.33 mm，未通过稳定目标；本次未重训 PPO。
+
+6 项相关测试通过，包括指尖参考固定、三次退腕及停留、次数完成前不放行、角度/载荷条件与连续接触。输出中 `support_repeats_completed` 及回放 `SUPPORT n/3` 显示完成次数，`support_contact_metrics.json` 保存三轮实际接触指标。
+
+```bash
+MUJOCO_GL=egl OMP_NUM_THREADS=1 .venv/bin/python scripts/simulation/run_dynamic_regrasp.py --policy local/outputs/potato/dynamic_regrasp_angle_gate/policy.zip --wrist-retreat-mm 4 --smooth-regrasp --angle-threshold-deg 80 --curl-release --landing-wrist-retreat-mm 4 --early-pip-curl --support-repeats 3 --output local/outputs/potato/dynamic_regrasp_three_support_seated --export
+```
+
+旧版回放保留，修改前源码在 `local/checkpoints/20260918-before-three-support-strokes/source.tar.gz`。早期候选 `three_support_strokes*`、`three_support_balanced`、`three_support_continuous` 中第二/三轮食指滑动较大，不是最终回放。
+
+---
+
+## 历史版本：加强离开初段的 PIP 屈曲
+
+修改前认可版完整保存为 `local/checkpoints/20260918-landing-wrist-4mm-preserved/source-policy-results.tar.gz`，包含源码、测试、策略、旧回放、比较数据及说明，另有 README 恢复命令。仍依赖工作区原有资产与 Python 环境。
+
+新增可选 `--early-pip-curl`。只在抬指前半段提前竖直腾空进度：`lift_u = u + 0.12*sin(2*pi*u)^2`（u<0.5），后半段恢复原参数。最大腾空高度仍为 12 mm，DIP 轨迹、水平后移目标、后半段落指目标和 4 mm 退腕配合保持不变。这样 PIP 较早分担屈曲，不通过加大落指后的收缩来补偿。
+
+同一现有 PPO、同一确定性场景三轮对比：离开阶段实际 PIP 净屈曲从旧版约 −0.7–1.7° 增至 3.3–6.2°，三指均更明显屈曲。落指最大 PIP 局部回弹 0.048°（旧版 0.025°），仍小于 0.05°；轮间 DIP 最大回弹约 1.08°，没有声称全程无回弹。三轮均重新按稳，土豆最大位移 1.60 mm；零残差基准也通过三轮，位移 2.04 mm。本次沿用策略，未重新训练。
+
+5 项直接相关测试通过，覆盖早期 PIP 增强、落指几何不变、腕部朝向、落指驱动目标只展开或保持及轮间手形一致。对比指标见 `local/outputs/potato/dynamic_regrasp_early_pip_curl/joint_comparison.json`。
+
+```bash
+MUJOCO_GL=egl OMP_NUM_THREADS=1 .venv/bin/python scripts/simulation/run_dynamic_regrasp.py --policy local/outputs/potato/dynamic_regrasp_angle_gate/policy.zip --wrist-retreat-mm 8 --smooth-regrasp --angle-threshold-deg 80 --curl-release --landing-wrist-retreat-mm 4 --early-pip-curl --output local/outputs/potato/dynamic_regrasp_early_pip_curl --export
+```
+
+不带 `--early-pip-curl` 可继续运行上一版，旧结果未覆盖。
+
+---
+
+## 已保留版本：落指时腕部轻退 4 mm，减小接触回弹
+
+新增 `--landing-wrist-retreat-mm`，范围 0–4 mm，默认 0，要求 `--curl-release`。落指期间按五次平滑函数沿 +Y 后移，参考腕部高度、朝向不变；按稳阶段保持后移后的姿态，下一轮从该腕部终点平滑衔接。指尖目标同时重新求解，以维持原来的世界接触位置，不通过手腕拖动物体。
+
+同一现有 PPO、相同确定性场景，比较 0/2/4 mm：
+
+| 目标后移 | 落指最大 PIP 回弹 | 轮间最大 DIP 回弹 | 土豆最大位移 |
+|---|---|---|---|
+| 0 mm | 0.898° | 2.007° | 1.97 mm |
+| 2 mm | 0.202° | 1.538° | 1.62 mm |
+| 4 mm | 0.025° | 1.072° | 1.63 mm |
+
+三者均完成三轮且重新按稳。4 mm 版本落指区间实际腕部后移约 3.74–3.77 mm，伴随约 0.36–0.38 mm 的竖直跟踪偏移，朝向变化最大 0.067°；不可称真实腕部绝对无旋转或高度完全不动。落指 DIP 没有测得反向回弹，但轮间仍有约 1° 回弹，不能报告为全程零回弹。
+
+比较原始记录及脚本见 `local/outputs/potato/landing_wrist_comparison/`。本次未重训，保持原力矩上限和接触物理。验证了世界指尖目标不变、参考腕部只沿后退方向移动且朝向不变，以及完整动力学回合。
+
+```bash
+MUJOCO_GL=egl OMP_NUM_THREADS=1 .venv/bin/python scripts/simulation/run_dynamic_regrasp.py --policy local/outputs/potato/dynamic_regrasp_angle_gate/policy.zip --wrist-retreat-mm 8 --smooth-regrasp --angle-threshold-deg 80 --curl-release --landing-wrist-retreat-mm 4 --output local/outputs/potato/dynamic_regrasp_landing_wrist_4mm --export
+```
+
+旧版输出保留，修改前源码位于 `local/checkpoints/20260918-before-landing-wrist-retreat/source.tar.gz`。
+
+---
+
+## 历史版本：取消轮间重新蜷指，落指以展开为主
+
+本轮诊断找到此前遗漏的主要问题：虽然落指阶段 DIP 已展开，但 `WRIST_FOLLOW` 又插值回旧的深屈曲起始手形，实际 DIP 重新屈曲约 40–59°。现在每轮起始和落指参考均采用 30° DIP，保留一定弯曲扣住物体，取消这次大幅手形重置。
+
+离开时 DIP 弯曲拱形增量由 14° 增至 24°，指尖腾空拱高为 12 mm；食指接触目标横向调整 2 mm。角度触发后，使用独立 MuJoCo scratch data，按实际锁定的腕部目标重新求解后续指尖世界位置及 DIP 角度；不会覆盖真实仿真 qpos。对应刀姿也重新求解，保留 6 mm 参考刀手间隙，避免提前触发后仍使用退满腕部的旧几何。
+
+落指、按稳及轮间衔接阶段对 PIP/DIP 驱动目标施加只能展开或保持的限制，并用实际关节角反馈限制目标；这不等于强制真实状态单调。最终实际回放中，落指 PIP 仍有小于 0.9° 的局部回弹，轮间 DIP 约 2°；不能报告为完全无收缩。轮间原先 40–59° 的主动重新蜷指已消除。
+
+最终输出 `local/outputs/potato/dynamic_regrasp_open_landing_feedback/`。PPO 三轮全部重新按稳，土豆最大位移 1.97 mm；零残差三轮也通过，最大位移 2.19 mm。刀手实际接触力为零，最小间隙约 4.54 mm。沿用现有 PPO，未重新训练。相关回归检查通过；新增检查验证轮间 DIP 起始姿态一致、落指目标不能重新屈曲。原 PIP 离开幅度测试的 2° 下限改为 1°，因本轮加强 DIP 后 PIP 分担更少，仍要求两关节均屈曲。
+
+```bash
+MUJOCO_GL=egl OMP_NUM_THREADS=1 .venv/bin/python scripts/simulation/run_dynamic_regrasp.py --policy local/outputs/potato/dynamic_regrasp_angle_gate/policy.zip --wrist-retreat-mm 8 --smooth-regrasp --angle-threshold-deg 80 --curl-release --output local/outputs/potato/dynamic_regrasp_open_landing_feedback --export
+```
+
+修改前源码保存在 `local/checkpoints/20260918-before-cycle-recurl-fix/source.tar.gz`；此前回放和完整快照均保留。诊断数据见输出目录的 `joint_directions.txt`。MCP 本轮不作为主目标；独立指甲接触面仍未建模。
+
+---
+
+## 历史试验：离开时 PIP/DIP 屈曲，落指时展开
+
+新增 `--curl-release`，依赖平滑倒手模式。此前只约束指尖位置，中指实际 DIP 在落指后仍略屈曲。现在增加 DIP 角度约束：离开时平滑增加屈曲，随后展开到参考 12°；三指仍同步沿连续轨迹后移 8 mm，腾空拱高改为 10 mm，为 PIP/DIP 同时屈曲提供空间。主三指驱动刚度为原值 2.5 倍、阻尼按平方根调整，保持原力矩上限；腕部仍按角度触发锁定。
+
+三轮实际 PPO：离开阶段 PIP 屈曲约 4–6.3°、DIP 屈曲约 8.7–10.3°；落指阶段 PIP 展开约 2.1–4.6°、DIP 展开约 8.5–9.1°。三轮均重新按稳，土豆最大位移 2.08 mm；零残差基准为 3.11 mm，也通过三轮稳定目标。沿用现有策略，未重训。12 项相关测试通过；实际关节方向另由 `joint_motion_metrics.json` 记录。
+
+尚未满足全部要求：MCP 在落指阶段仍增加屈曲约 6–7.7°，没有实现用户期望的轻微伸展。当前接触是半径 11 mm 的球形指腹，没有独立指甲几何或指甲接触测量，不能称为已经实现指甲扣住。当前只是解决 PIP/DIP 先收后展；MCP 配合和末端接触几何需要后续工作。
+
+```bash
+MUJOCO_GL=egl OMP_NUM_THREADS=1 .venv/bin/python scripts/simulation/run_dynamic_regrasp.py --policy local/outputs/potato/dynamic_regrasp_angle_gate/policy.zip --wrist-retreat-mm 8 --smooth-regrasp --angle-threshold-deg 80 --curl-release --output local/outputs/potato/dynamic_regrasp_curl_tracking --export
+```
+
+修改前源码保存于 `local/checkpoints/20260918-before-curl-release/source.tar.gz`。旧版回放及完整的退腕倒手快照均保留。首次 8 mm 高度且未加强跟踪的候选在 `dynamic_regrasp_curl_release/`，该候选中部分 PIP 实际方向仍错误，不是最终版。
+
+---
+
+## 历史试验：80° 提前触发，连续弧线移指
+
+用户要求保留已认可版本后再调整。修改前完整快照为 `local/checkpoints/20260918-wrist-then-fingers-105658/source-policy-results.tar.gz`，包含仿真源码、脚本、测试、说明、PPO 策略及旧版回放，另有恢复运行命令。快照依赖工作区已有资产和 Python 环境，不包含整套资产或虚拟环境。
+
+新增 `--angle-threshold-deg 80 --smooth-regrasp`，与 `--wrist-retreat-mm 8` 配合使用。角度门槛从 85° 改为 80°，仍要求三指全部达到门槛、接触载荷 >0.1 N 持续 60 ms，实际触发最低角约 81°。保持按住时退腕、触发后锁定腕部目标。
+
+把分开的抬指/移指/落指插值改成单条路径：水平用五次平滑函数，竖直叠加 5 mm 正弦平方拱起；三个阶段标签只是同一条曲线的分段显示，中途不停车。原 2 秒退关节保持缩至 0.2 秒，并去掉 0.4 秒抬指前等待；刀退开阶段保留，轮间仍有跟进动作，因此不是完全取消所有阶段。
+
+最终沿用 PPO 的三轮均重新按稳，全程土豆最大位移 3.20 mm，刀手接触力为零；相比保留版的 2.49 mm，动作节奏更连贯但物体位移略增。本次未重训。零残差三轮基准触发刀手接触失败，不能声称此新参考无需策略也稳定。12 项相关测试通过，删除等待后重跑平滑轨迹测试通过。
+
+```bash
+MUJOCO_GL=egl OMP_NUM_THREADS=1 .venv/bin/python scripts/simulation/run_dynamic_regrasp.py --policy local/outputs/potato/dynamic_regrasp_angle_gate/policy.zip --wrist-retreat-mm 8 --smooth-regrasp --angle-threshold-deg 80 --output local/outputs/potato/dynamic_regrasp_smooth_80_final --export
+```
+
+原版仍可用不带新参数的旧命令运行，原结果没有覆盖。新参数默认关闭，便于比较或恢复。
+
+---
+
+## 已保留版本：指尖支撑时退腕，角度触发后停腕移指
+
+新增 `--wrist-retreat-mm 8`：切菜准备阶段手腕沿世界 +Y 后移，朝向和高度保持，三指参考接触点固定。三指实际中节指骨角度均 ≥85°且载荷 >0.1 N 持续 60 ms 后，锁定触发时的腕部驱动目标。旧 `KNUCKLE_BACK` 在本模式下仅保持姿态、等待刀退开，不再执行额外退关节动作。随后三指同步抬高 5 mm、后移 8 mm、落下；移指期间手腕目标固定。直接从近垂直指形抬高 12 mm 不可达，因此本模式降低抬指高度。
+
+连续三轮仍保留轮间平滑跟进。因实际角度提前达到，每轮准备阶段手腕实测后移 6.2–6.3 mm；轮间补齐到下一轮起点，始终继续向后推进。三轮移指期间实际腕部位置偏移最大约 0.22 mm，轮内朝向变化约 0.033°。参考指尖固定不等于真实接触不滑：按住阶段指尖实际三维位置变化约 1.3–2.6 mm，尚需优化。
+
+沿用现有 PPO 未重训；三轮均重新按稳，土豆最大位移 2.49 mm。零残差基准位移 8.47 mm，未通过稳定目标。11 项相关测试通过，包括参考固定指尖/后移手腕及角度触发后腕部控制目标保持。结果仅为当前确定性场景。
+
+```bash
+MUJOCO_GL=egl OMP_NUM_THREADS=1 .venv/bin/python scripts/simulation/run_dynamic_regrasp.py --policy local/outputs/potato/dynamic_regrasp_angle_gate/policy.zip --wrist-retreat-mm 8 --output local/outputs/potato/dynamic_regrasp_wrist_then_fingers --export
+```
+
+输出目录含 `wrist_motion_metrics.json`，记录实际腕部和指尖运动。默认参数仍保留基础动作，使用上面参数运行本试验；不与抬腕或自由腕部 PIP 补偿混用。
+
+---
+
+## 历史试验：只竖直抬腕 5 mm，保持朝向
+
+新增 `--wrist-lift-mm`（默认 0，范围 0–5 mm），不启用已撤回的 `pip_guard`。三指同步抬起时手腕平滑竖直抬高，后移阶段保持高度，落指时回到原高度。手腕目标朝向及水平位置固定，三指仍抬起 12 mm、后移 8 mm。切菜准备和角度触发逻辑未改，不能声称已消除全部关节前探。
+
+实际 PPO 回放抬指阶段 PIP 前探从食指/中指/无名指约 4.25/4.00/4.96 mm 降至 2.06/1.41/2.22 mm；切菜准备阶段前探基本未变。
+
+5 mm 版本沿用现有 PPO，连续三轮全部重新按稳，土豆最大位移 2.75 mm。轮内实际手腕最大朝向偏差约 0.054°；参考姿态偏差小于 0.00004°，参考水平偏移小于 0.001 mm。10 项相关测试通过，包括朝向固定、升降幅度及三指抬起/后移幅度。结果只代表当前确定性场景，本次没有重新训练。
+
+```bash
+MUJOCO_GL=egl OMP_NUM_THREADS=1 .venv/bin/python scripts/simulation/run_dynamic_regrasp.py --policy local/outputs/potato/dynamic_regrasp_angle_gate/policy.zip --wrist-lift-mm 5 --output local/outputs/potato/dynamic_regrasp_vertical_wrist --export
+```
+
+---
+
+## 基础版本：恢复手指倒手，撤回腕部补偿
+
+用户回看指出 PIP 约束导致拧手腕，破坏了原有倒手效果。因此默认关闭 `pip_guard`，恢复角度触发版本的手指轨迹和驱动增益。每轮倒手主体的手臂参考保持固定，三指同步抬起、后移、落下；轮间仍保留原有手腕跟进。接近垂直的角度触发、三轮连续执行、拇指小指移开和平底土豆均保留。
+
+沿用 `dynamic_regrasp_angle_gate/policy.zip`，本次没有重新训练。输出目录为 `local/outputs/potato/dynamic_regrasp_restored/`。恢复版实测连续三轮全部重新按稳，PPO 全程最大土豆位移 2.75 mm。这次恢复动作形态，并未解决旧版几毫米的关节前探问题；不能再为消除前探而自由改变腕部姿态。用户允许必要时轻微竖直抬腕，但不允许拧腕；当前恢复版尚未新增抬腕。
+
+之前的腕部补偿实验保留代码和结果，仅通过 `--pip-guard` 显式启用，使用时应指定独立 `--output` 目录。
+
+---
+
+## 已撤回的实验：避免 PIP 在倒手前向前探
+
+用户指出近侧指间关节在后移前刻意前伸。诊断确认旧策略回放中，`CUT_ADVANCE` 的 PIP 前向位移约 2–3 mm，`TRIO_LIFT` 约 4–5 mm。
+
+新增 `PipGuardSolver` 联合求解左臂与三指：保持指尖目标位置，同时约束 PIP 的世界 Y 位置。在切菜准备和抬指/移指阶段不先向前探；关节后退阶段向后移动。角度约束直接使用中节指骨与竖直方向的三维夹角，继续由实际角度 ≥85°和接触持续 60 ms 触发。手腕需要配合，已不再承诺每轮整个手臂固定。
+
+为使参考姿态能在动力学中执行，求解加入左臂碰撞部位与砧板至少 3 mm 的几何间隙，避免腕部穿过砧板的不可执行姿态。轨迹按最大关节目标步长 0.008 rad/20 ms 重采样；三指位置驱动增益为原来的 2.5 倍，阻尼相应调整，原力矩上限、摩擦系数、土豆质量、全部碰撞均保留。仍无测试外力，拇指/小指移开。
+
+新输出目录 `local/outputs/potato/dynamic_regrasp_pip_guard/`。本次沿用 `dynamic_regrasp_angle_gate/policy.zip`，未重新训练；参考轨迹、协调控制与接触跟踪进行了调整。零残差参考轨迹累计滑动约 12.3 mm，不能将它报告为稳定策略；沿用现有 PPO 策略的三轮最大位移约 3.76 mm，并通过每轮重新按稳检查。
+
+报告新增 `pip_forward_mm`（相对当前阶段起点）、`max_pre_retreat_pip_forward_mm`（切菜准备、关节后退、抬指和移指阶段的最大前向偏移）。实际动力学仍可能有小幅跟踪误差，不能把参考位置约束说成真实状态被强制固定。落指阶段的数据另保留在逐帧记录中。
+
+最终 PPO 三轮回放中，上述阶段食指、中指、无名指 PIP 最大前向偏移分别为 0.189、0.115、0.278 mm；三轮均重新按稳，拇指和小指接触力为零。连续倒手的 6 项测试通过，其余相关测试在此前运行中通过。轮间连续性检查专门验证轮次边界不重置物体，不限制轮内真实接触导致的逐帧运动。
+
+```bash
+MUJOCO_GL=egl .venv/bin/python scripts/simulation/run_dynamic_regrasp.py --policy local/outputs/potato/dynamic_regrasp_angle_gate/policy.zip --export
+.venv/bin/python scripts/simulation/run_dynamic_regrasp.py --policy local/outputs/potato/dynamic_regrasp_angle_gate/policy.zip --view
+```
+
+修改前源码在 `local/checkpoints/20260918-before-pip-guard/source.tar.gz`。诊断记录在 `local/outputs/potato/pip_direction_diagnostics/`。
+
+---
+
+## 历史版本：中节指骨角度触发倒手
+
+按用户明确的动作顺序：切菜阶段，中节指骨（模型 joint3/PIP 到 joint4/DIP）的角度增大，接近垂直于砧板时才开始关节后退；后退后角度减小到约 52°是正常的，再执行三指同步抬起/后移/落下。
+
+实现方式：
+
+- 新增 `CUT_ADVANCE` 参考阶段，指尖保持接触，中节指骨逐渐接近竖直。食指接触点向外调整 4 mm，以减小横向倾斜造成的可达角度限制。
+- 运行时从实际 MuJoCo 关节锚点测量中节指骨与水平砧板的三维夹角，90°表示竖直。必须三指都达到 85°（距离竖直 5°以内），且三指法向载荷均超过 0.1 N，连续三个 20 ms 控制采样满足条件后才触发。
+- 条件提前达到就转入 `KNUCKLE_BACK`，无需等参考阶段播完。过渡用衰减的关节目标偏移衔接，不重置实际关节状态；刀保持在土豆上方。
+- 条件未达到时保持在 `ANGLE_GATE`；等待超过 5 秒以 `angle_gate_timeout` 终止。每轮只触发一次，避免阈值附近重复触发。
+- 删除已不用的辅助指建立/释放等待，保留落指后的稳定等待。拇指、小指仍移开，仍然无测试外力、3 mm 平底、连续三轮且不重置物体。
+- PPO 输入新增实际三指角度和持续满足条件的进度；策略仍控制三指压紧量与公共动作速度。触发条件由显式状态逻辑约束，不能声称它是 RL 自行发现的规则。旧策略观察维度不同，需使用新训练结果。
+
+窗口显示 PIP–DIP 指骨角度及 `ARMED/TRIGGERED` 状态。输出目录 `local/outputs/potato/dynamic_regrasp_angle_gate/`，触发记录在评估/逐帧文件的 `angle_gate_events`；另导出每轮触发和结束截图。修改前源码存档在 `local/checkpoints/20260918-before-angle-gate/source.tar.gz`。
+
+```bash
+OMP_NUM_THREADS=1 .venv/bin/python scripts/simulation/run_dynamic_regrasp.py --train 16384
+MUJOCO_GL=egl .venv/bin/python scripts/simulation/run_dynamic_regrasp.py --policy local/outputs/potato/dynamic_regrasp_angle_gate/policy.zip --export
+.venv/bin/python scripts/simulation/run_dynamic_regrasp.py --policy local/outputs/potato/dynamic_regrasp_angle_gate/policy.zip --view
+```
+
+本次 PPO 训练 16,384 步后，三轮实际触发角度均在约 85–89°，全程最大位移 2.75 mm（零残差基准 4.52 mm），三轮均通过重新按稳检查。37 项相关测试通过，并额外验证了提前触发和连续三个采样满足条件。不可达角度测试确认会等待并超时，不会继续倒手。
+
+仍以三轮全部重新按稳、累计位移小于 5 mm 为稳定目标。角度触发正确和抓持稳定是分别验证的指标。当前场景无随机化，刀不切断土豆。
+
+---
+
+## 历史版本：连续 3 轮切菜倒手
 
 任务改为同一动力学回合内连续完成 3 轮：刀做两次浅下移，关节后退，刀退开，三指同步抬起/后移 8 mm/落下，重新按稳，再进行下一轮。三轮累计指尖后移 24 mm。整个序列约 29.7 秒，轮间不重置土豆的位置、速度、接触状态或累计位移。
 

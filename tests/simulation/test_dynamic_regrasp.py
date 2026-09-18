@@ -84,3 +84,9 @@ def test_default_environment_has_no_external_push():
         if done or truncated:break
     assert plant.push_onset is None
     assert info['termination_reason']=='complete'
+
+
+def test_default_regrasp_does_not_twist_arm_reference(env):
+    # Finger regrasp must not be replaced by an arm/wrist compensation motion.
+    arm=env.plan.qpos[:,env.plan.left_qpos_ids]
+    np.testing.assert_allclose(arm,np.broadcast_to(arm[0],arm.shape),atol=1e-12)

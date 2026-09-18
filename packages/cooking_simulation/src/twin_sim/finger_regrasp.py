@@ -12,6 +12,7 @@ from robot_core.paths import data_root
 from twin_sim.kinematics import Kinematics
 from twin_sim.model import SimulationModel
 from twin_sim.names import LEFT_ARM, RIGHT_ARM
+from twin_sim.pip_guard import PipGuardSolver
 from twin_sim.potato_contact import PotatoConfig, build_robot_potato_xml, potato_vertices
 
 
@@ -36,6 +37,7 @@ class FingerRegraspPreview:
 class FingerSolver:
     def __init__(self, model, data, finger):
         self.model, self.data = model, data
+        self.finger = finger
         joints = np.array([model.joint(f"left_finger{finger}_joint{j}").id for j in range(1, 5)])
         self.qids, self.dids = model.jnt_qposadr[joints], model.jnt_dofadr[joints]
         acts = [model.actuator(f"left_finger{finger}_joint{j}_actuator").id for j in range(1, 5)]
@@ -48,13 +50,18 @@ class FingerSolver:
         # Forward is world -Y, toward the blade. Positive: PIP ahead of tip.
         return float(self.data.geom_xpos[self.tip, 1] - self.data.xpos[self.pip, 1])
 
-    def solve(self, target, lead=None):
+    def solve(self, target, lead=None, middle_tilt=None, dip_angle=None):
         m, d = self.model, self.data
         target = np.asarray(target)
 
         def error():
             mujoco.mj_fwdPosition(m, d)
             value = target-d.geom_xpos[self.tip]
+            if middle_tilt is not None:
+                v=d.xanchor[self.model.joint(f'left_finger{self.finger}_joint4').id]-d.xanchor[self.model.joint(f'left_finger{self.finger}_joint3').id]
+                return np.r_[value,-(v[1]+np.tan(middle_tilt)*v[2])]
+            if dip_angle is not None:
+                return np.r_[value, .03*(dip_angle-d.qpos[self.qids[3]])]
             return value if lead is None else np.r_[value, lead-self.lead()]
 
         for _ in range(160):
@@ -64,6 +71,14 @@ class FingerSolver:
             jt = np.zeros((3, m.nv))
             mujoco.mj_jacGeom(m, d, jt, None, self.tip)
             jac = jt[:, self.dids]
+            if middle_tilt is not None:
+                j3=np.zeros((3,m.nv));j4=np.zeros((3,m.nv))
+                mujoco.mj_jacBody(m,d,j3,None,m.body(f'left_finger{self.finger}_link3').id)
+                mujoco.mj_jacBody(m,d,j4,None,m.body(f'left_finger{self.finger}_link4').id)
+                diff=j4-j3
+                jac=np.vstack((jac,(diff[1]+np.tan(middle_tilt)*diff[2])[self.dids]))
+            if dip_angle is not None:
+                jac = np.vstack((jac, [0., 0., 0., .03]))
             if lead is not None:
                 jp = np.zeros((3, m.nv))
                 mujoco.mj_jacBody(m, d, jp, None, self.pip)
@@ -161,7 +176,19 @@ class FingerSolver:
         raise ValueError("Auxiliary finger cannot reach a support contact")
 
 
-def build_finger_regrasp_preview(*, bottom_cut_m=0.0, fingertip_back_shift_m=0.0, palm_lift_m=.016) -> FingerRegraspPreview:
+def build_finger_regrasp_preview(*, bottom_cut_m=0.0, fingertip_back_shift_m=0.0, palm_lift_m=.016, angle_gate=False, pip_guard=False, wrist_lift_m=0.0, wrist_retreat_m=0.0, smooth_regrasp=False, curl_release=False, early_pip_curl=False, support_repeats=1) -> FingerRegraspPreview:
+    if support_repeats not in (1,2,3) or (support_repeats>1 and (not wrist_retreat_m or not angle_gate)):
+        raise ValueError("support_repeats must be 1–3 and repeated support requires wrist retreat")
+    if early_pip_curl and not curl_release:
+        raise ValueError("early_pip_curl requires curl_release")
+    if curl_release and not smooth_regrasp:
+        raise ValueError("curl_release requires smooth_regrasp")
+    if smooth_regrasp and not wrist_retreat_m:
+        raise ValueError("smooth_regrasp requires wrist retreat")
+    if not 0 <= wrist_retreat_m <= .008 or (wrist_retreat_m and (pip_guard or wrist_lift_m)):
+        raise ValueError("wrist retreat requires fixed orientation, no lift or pip guard")
+    if not 0 <= wrist_lift_m <= .005 or (wrist_lift_m and pip_guard):
+        raise ValueError("wrist_lift_m must be 0–5 mm and cannot combine with pip_guard")
     # Width 80, length along slicing/retreat axis 130, height 60 mm.
     config = PotatoConfig(radii_m=(.040, .065, .030), mass_kg=.22, bottom_cut_m=bottom_cut_m)
     height = .230-float(potato_vertices(config)[:,2].min()) if bottom_cut_m else .26
@@ -189,14 +216,25 @@ def build_finger_regrasp_preview(*, bottom_cut_m=0.0, fingertip_back_shift_m=0.0
         raise ValueError("Initial palm placement is unreachable")
     data.qpos[sim.left.qpos_ids] = lifted.joints_rad
     mujoco.mj_forward(model, data)
-    for finger, x, y in zip(fingers, (.405, .431, .457), (-.041, -.043, -.037), strict=True):
+    for finger, x, y in zip(fingers, (.403 if curl_release else .401 if angle_gate else .405, .431, .457), (-.041, -.043, -.037), strict=True):
         finger.seat(lead=.007)
         target = data.geom_xpos[finger.tip].copy()
         target[0] = x
         target[1] = y+fingertip_back_shift_m
-        finger.solve(target, lead=.007)
-        finger.seat_vertical(lead=.007)
+        finger.solve(target, lead=None if angle_gate and finger.finger==2 else .007)
+        finger.seat_vertical(lead=None if angle_gate and finger.finger==2 else .007)
     mujoco.mj_forward(model, data)
+    if curl_release:
+        # Use the landing DIP posture at every round's start, rather than
+        # resetting to the old deeply curled seed during WRIST_FOLLOW.
+        for finger in fingers:
+            target = data.geom_xpos[finger.tip].copy()
+            finger.solve(target, dip_angle=np.radians(30))
+        mujoco.mj_forward(model, data)
+    guard=PipGuardSolver(model,data,sim.left,fingers) if pip_guard else None
+    if guard:
+        initial_tips=np.array([data.geom_xpos[f.tip].copy() for f in fingers])
+        guard.solve(initial_tips,initial_tips[:,1]-.0095)
     model.geom_rgba[model.geom("left_palm_grasp_pad").id, 3] = 0
     for f in (2, 3, 4):
         model.geom_rgba[model.geom(f"left_finger{f}_pad").id] = [.15, .85, .35, .8]
@@ -228,18 +266,59 @@ def build_finger_regrasp_preview(*, bottom_cut_m=0.0, fingertip_back_shift_m=0.0
     record("HOLD")
     anchors = tips[0].copy()
     start_leads = np.array(leads[0])
+    fixed_pip_y=np.array([data.xpos[f.pip,1] for f in fingers])
     for _ in range(24):
         record("HOLD")
-    for t in np.linspace(0, 1, 101)[1:]:
+    retreat_base = left_ik.fk(data.qpos[sim.left.qpos_ids].copy())
+    retreat_seed = data.qpos[sim.left.qpos_ids].copy()
+    if angle_gate:
+        initial_tilts=[]
+        for finger in fingers:
+            v=data.xpos[model.body(f'left_finger{finger.finger}_link4').id]-data.xpos[finger.pip]
+            initial_tilts.append(np.arctan2(v[1],-v[2]))
+        if support_repeats>1:
+            progress=[]
+            for repeat in range(support_repeats):
+                progress.extend((repeat+t*t*t*(10-15*t+6*t*t))/support_repeats for t in np.linspace(0,1,41)[1:])
+                progress.extend([(repeat+1)/support_repeats]*20)
+        else:
+            progress=[t*t*(3-2*t) for t in np.linspace(0,1,101)[1:]]
+        for s in progress:
+            if wrist_retreat_m:
+                target = retreat_base.copy()
+                target[1, 3] += s*wrist_retreat_m
+                result = left_ik.ik(target, retreat_seed, tolerance=1e-6)
+                if not result.success:
+                    raise ValueError("Wrist retreat is unreachable")
+                data.qpos[sim.left.qpos_ids] = result.joints_rad
+                mujoco.mj_fwdPosition(model, data)
+            if guard:
+                guard.solve(anchors,fixed_pip_y,(1-s)*np.array(initial_tilts)+s*np.radians(-1))
+            else:
+                for i,finger in enumerate(fingers):
+                    finger.solve(anchors[i],middle_tilt=(1-s)*initial_tilts[i]+s*np.radians(-1))
+            record("CUT_ADVANCE")
+        for _ in range(10):record("ANGLE_GATE")
+        start_leads=np.array([finger.lead() for finger in fingers])
+    for t in np.linspace(0, 1, 11 if smooth_regrasp else 101)[1:]:
         s = t*t*(3-2*t)
-        for i, finger in enumerate(fingers):
-            finger.solve(anchors[i], (1-s)*start_leads[i]+s*.0015)
+        if wrist_retreat_m:
+            record("KNUCKLE_BACK")
+            continue
+        if guard:
+            guard.solve(anchors,(1-s)*fixed_pip_y+s*(anchors[:,1]-.0015),
+                        np.full(3,(1-s)*np.radians(-1)+s*np.radians(-37)))
+        else:
+            for i, finger in enumerate(fingers):
+                finger.solve(anchors[i], (1-s)*start_leads[i]+s*.0015)
         record("KNUCKLE_BACK")
     for _ in range(30):
         record("KNIFE_CLEAR")
+    guarded_pip_y=np.array([data.xpos[f.pip,1] for f in fingers])
     before_support = data.qpos.copy()
-    for helper in helpers:
-        helper.seat_free()
+    if not guard:
+        for helper in helpers:
+            helper.seat_free()
     helper_closed = [data.qpos[f.qids].copy() for f in helpers]
     data.qpos[:] = before_support
     for t in np.linspace(0, 1, 41)[1:]:
@@ -249,25 +328,68 @@ def build_finger_regrasp_preview(*, bottom_cut_m=0.0, fingertip_back_shift_m=0.0
         record("SUPPORT_ESTABLISH")
     for _ in range(20):
         record("SUPPORT_HOLD")
+    wrist_base = left_ik.fk(data.qpos[sim.left.qpos_ids].copy())
+    wrist_seed = data.qpos[sim.left.qpos_ids].copy()
+    def raise_wrist(amount):
+        target = wrist_base.copy()
+        target[2, 3] += amount
+        result = left_ik.ik(target, wrist_seed, tolerance=1e-6)
+        if not result.success:
+            raise ValueError("Vertical wrist lift is unreachable")
+        data.qpos[sim.left.qpos_ids] = result.joints_rad
+        mujoco.mj_fwdPosition(model, data)
+
     starts = np.array([data.geom_xpos[f.tip].copy() for f in fingers])
-    high = starts+[0, 0, .012]
-    back = high+[0, .008, 0]
-    for label, first, last in (("TRIO_LIFT", starts, high), ("TRIO_RETREAT", high, back)):
+    if smooth_regrasp:
+        original = data.qpos.copy()
+        initial_dip = np.array([data.qpos[f.qids[3]] for f in fingers])
+        for i, finger in enumerate(fingers):
+            finger.solve(starts[i]+[0, .008, 0])
+            finger.seat_vertical()
+        contacts = np.array([data.geom_xpos[f.tip].copy() for f in fingers])
+        data.qpos[:] = original
+        for u in np.linspace(0, 1, 101)[1:]:
+            s = u*u*u*(10-15*u+6*u*u)
+            targets = (1-s)*starts+s*contacts
+            # Advance only the rising half of the clearance arc. This gives
+            # PIP more early flexion without changing DIP or landing targets.
+            lift_u=u+.12*np.sin(2*np.pi*u)**2 if early_pip_curl and u<.5 else u
+            targets[:, 2] += (.012 if curl_release else .005)*np.sin(np.pi*lift_u)**2
+            for i, finger in enumerate(fingers):
+                dip = ((1-s)*initial_dip[i]+s*np.radians(30)+np.radians(24)*np.sin(np.pi*u)**2) if curl_release else None
+                finger.solve(targets[i], dip_angle=dip)
+            record("TRIO_LIFT" if u < 1/3 else "TRIO_RETREAT" if u < 2/3 else "TRIO_PLACE")
+    else:
+        high = starts+[0, 0, .005 if wrist_retreat_m else .012]
+        back = high+[0, .008, 0]
+        for label, first, last in (("TRIO_LIFT", starts, high), ("TRIO_RETREAT", high, back)):
+            for t in np.linspace(0, 1, 41)[1:]:
+                s = t*t*(3-2*t)
+                if wrist_lift_m:
+                    raise_wrist(wrist_lift_m*(s if label == "TRIO_LIFT" else 1.0))
+                if guard:
+                    guard.solve((1-s)*first+s*last,guarded_pip_y)
+                else:
+                    for i, finger in enumerate(fingers):
+                        finger.solve((1-s)*first[i]+s*last[i])
+                record(label)
+        before_seating = data.qpos.copy()
+        if wrist_lift_m:
+            raise_wrist(0.0)
+        for finger in fingers:
+            finger.seat_vertical()
+        contacts = np.array([data.geom_xpos[f.tip].copy() for f in fingers])
+        data.qpos[:] = before_seating
         for t in np.linspace(0, 1, 41)[1:]:
             s = t*t*(3-2*t)
-            for i, finger in enumerate(fingers):
-                finger.solve((1-s)*first[i]+s*last[i])
-            record(label)
-    before_seating = data.qpos.copy()
-    for finger in fingers:
-        finger.seat_vertical()
-    contacts = np.array([data.geom_xpos[f.tip].copy() for f in fingers])
-    data.qpos[:] = before_seating
-    for t in np.linspace(0, 1, 41)[1:]:
-        s = t*t*(3-2*t)
-        for i, finger in enumerate(fingers):
-            finger.solve((1-s)*back[i]+s*contacts[i])
-        record("TRIO_PLACE")
+            if wrist_lift_m:
+                raise_wrist(wrist_lift_m*(1-s))
+            if guard:
+                guard.solve((1-s)*back+s*contacts,guarded_pip_y)
+            else:
+                for i, finger in enumerate(fingers):
+                    finger.solve((1-s)*back[i]+s*contacts[i])
+            record("TRIO_PLACE")
     # Return the support fingers only after all three main fingertips re-seat.
     for t in np.linspace(0, 1, 41)[1:]:
         s = t*t*(3-2*t)
