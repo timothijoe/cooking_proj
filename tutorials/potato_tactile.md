@@ -1,4 +1,36 @@
-## 当前版本：初始化后刀持续贴近关节
+## 当前版本：左手完成倒手后，右手再跟刀
+
+新增可选 `--hand-first-knife`（同时启用 `--continuous-knife --no-knife-reverse`）。右手刀在三指抬起、后移、落下的完整阶段保持前后目标位置；进入落稳阶段后，确认三指接触力各大于 0.1 N、接触滑移速度各低于 20 mm/s，且土豆平移速度低于 20 mm/s，持续至少 60 ms 才允许刀跟进。等待期间暂停参考时钟，左手保持落下后的姿态。刀跟进目标的速度上限 20 mm/s，起步加速度 80 mm/s²；跟到目标间隙后才继续原有保持/下轮切菜流程。等待与跟进总计超过 3 秒会终止，不会在没有落稳证据时强行继续。
+
+PPO、seed 100 的三轮实际动力学：移指期间刀身前后幅度均小于 0.009 mm；左手落稳后刀跟进耗时约 0.30、0.30、0.28 秒。三轮稳定目标均通过，土豆最大位移 3.25 mm，刀手接触力为零。因为手先走、刀等待，移指末尾间隙会暂时增加至约 10.5 mm，随后刀重新跟近；刀本身没有向反方向远离。三处各三次支撑下刀、三指同步倒手、已有手指/手腕轨迹保留。使用原 PPO 权重，没有重新训练；零残差对照三轮完成但土豆位移 8.38 mm，未通过稳定目标。土豆仍为刚体，不产生真实切片。
+
+```bash
+DISPLAY=:0 OMP_NUM_THREADS=1 .venv/bin/python scripts/simulation/run_dynamic_regrasp.py --policy local/outputs/potato/dynamic_regrasp_angle_gate/policy.zip --wrist-retreat-mm 4 --smooth-regrasp --angle-threshold-deg 80 --curl-release --landing-wrist-retreat-mm 4 --early-pip-curl --support-repeats 3 --regrasp-speed 1.6 --knife-gap-mm 7 --cut-depth-mm 24 --continuous-knife --no-knife-reverse --hand-first-knife --output local/outputs/potato/dynamic_regrasp_hand_first --export --view
+```
+
+视频/逐帧指标在 `local/outputs/potato/dynamic_regrasp_hand_first/`。回放文字 `WAIT FOR LEFT HAND` 表示等左手，`FOLLOW LEFT HAND` 表示刀随后跟进。`knife_follow_events` 记录每轮落稳条件和允许跟进/跟进完成时间。新增 `test_hand_first_knife.py` 验证真实刀身保持、落稳后跟进顺序、速度上限及碰撞间隙；相关 12 项测试通过。
+
+修改前源码保存于 `local/checkpoints/20260918-before-hand-first-knife/source.tar.gz`，原 `dynamic_regrasp_no_knife_reverse` 回放仍保留。不带新参数可运行上一版。
+
+---
+
+## 历史版本：起指时刀稳住，随后单向跟进
+
+在已提交的 `5cd8d85` 上增加可选 `--no-knife-reverse`，需同时启用 `--continuous-knife`。初始化后限制刀的世界 Y 目标只向倒手方向推进；三指起指阶段保持刀的 Y 目标，随后恢复近距跟随。持刀臂 IK 用上一帧控制关节角作初值，避免相同刀尖目标下切换冗余关节姿态。手指和手腕轨迹沿用上一版，每处三次支撑下刀、三轮连续倒手不变。
+
+本版运行配方将目标间隙设为 7 mm，为起指时向前突出的关节轮廓预留空间；不再要求刀在此时反向避让来维持恒定 3 mm。实际刀手间隙约 3.00–8.04 mm。过小间隙并不保证此单向约束可行，不能仅锁住刀而忽略碰撞。碰撞和有限力驱动器保留，真实 qpos 未被覆盖。
+
+同一 PPO、seed 100 的三轮实测：倒手阶段刀身反向偏移分别约 0.0050、0.0063、0.0052 mm（上一版约 4.98、5.09、5.08 mm），属于执行跟踪的微小残差；刀的 Y 控制目标不反向。刀手接触力为零，土豆最大位移 3.15 mm，三轮重新按稳全部通过。刀与刚体土豆最小竖直间隙 2.66 mm，仍不切开土豆。本次未重新训练 PPO；零残差三轮最大位移 7.72 mm，仍未达到稳定目标。
+
+```bash
+DISPLAY=:0 OMP_NUM_THREADS=1 .venv/bin/python scripts/simulation/run_dynamic_regrasp.py --policy local/outputs/potato/dynamic_regrasp_angle_gate/policy.zip --wrist-retreat-mm 4 --smooth-regrasp --angle-threshold-deg 80 --curl-release --landing-wrist-retreat-mm 4 --early-pip-curl --support-repeats 3 --regrasp-speed 1.6 --knife-gap-mm 7 --cut-depth-mm 24 --continuous-knife --no-knife-reverse --output local/outputs/potato/dynamic_regrasp_no_knife_reverse --export --view
+```
+
+回放和视频位于 `local/outputs/potato/dynamic_regrasp_no_knife_reverse/`；旧版视频和提交保留。`test_knife_direction.py` 检查实际刀身方向、刀手间隙/接触及完整倒手；逐帧指标新增刀身世界位置和方向模式，汇总见输出目录中的 `knife_direction_metrics.json`。
+
+---
+
+## 历史版本：初始化后刀持续贴近关节
 
 新增可选 `--continuous-knife`。只在最开头加入一次 `INITIAL_APPROACH`：刀从前方约 35 mm、上方约 25 mm 的偏移姿态平滑靠近。随后取消每轮 `KNIFE_CLEAR` 的前退/抬高，也取消轮间独立 `KNIFE_APPROACH` 阶段。刀保留切菜下刀、提刀行程，抬指和后移时继续跟随 PIP 区域。
 

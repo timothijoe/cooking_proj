@@ -16,6 +16,8 @@ def main():
     parser.add_argument('--train',type=int,default=0,metavar='STEPS')
     parser.add_argument('--policy',type=Path)
     parser.add_argument('--cycles',type=int,default=3,choices=(1,2,3))
+    parser.add_argument('--hand-first-knife',action='store_true',help='Hold knife until fingers reseat, then advance; requires --no-knife-reverse')
+    parser.add_argument('--no-knife-reverse',action='store_true')
     parser.add_argument('--continuous-knife',action='store_true')
     parser.add_argument('--regrasp-speed',type=float,default=1.)
     parser.add_argument('--knife-gap-mm',type=float)
@@ -33,7 +35,7 @@ def main():
     parser.add_argument('--export',action='store_true')
     parser.add_argument('--output',type=Path,default=local_root()/'outputs/potato/dynamic_regrasp_restored')
     args=parser.parse_args();args.output.mkdir(parents=True,exist_ok=True)
-    env=DynamicRegraspEnv(disturbance=False,cycles=args.cycles,pip_guard=args.pip_guard,wrist_lift_m=args.wrist_lift_mm/1000,wrist_retreat_m=args.wrist_retreat_mm/1000,smooth_regrasp=args.smooth_regrasp,angle_threshold_deg=args.angle_threshold_deg,curl_release=args.curl_release,landing_wrist_retreat_m=args.landing_wrist_retreat_mm/1000,early_pip_curl=args.early_pip_curl,support_repeats=args.support_repeats,regrasp_speed=args.regrasp_speed,knife_gap_m=None if args.knife_gap_mm is None else args.knife_gap_mm/1000,cut_depth_m=args.cut_depth_mm/1000,continuous_knife=args.continuous_knife)
+    env=DynamicRegraspEnv(disturbance=False,cycles=args.cycles,pip_guard=args.pip_guard,wrist_lift_m=args.wrist_lift_mm/1000,wrist_retreat_m=args.wrist_retreat_mm/1000,smooth_regrasp=args.smooth_regrasp,angle_threshold_deg=args.angle_threshold_deg,curl_release=args.curl_release,landing_wrist_retreat_m=args.landing_wrist_retreat_mm/1000,early_pip_curl=args.early_pip_curl,support_repeats=args.support_repeats,regrasp_speed=args.regrasp_speed,knife_gap_m=None if args.knife_gap_mm is None else args.knife_gap_mm/1000,cut_depth_m=args.cut_depth_mm/1000,continuous_knife=args.continuous_knife,no_knife_reverse=args.no_knife_reverse,hand_first_knife=args.hand_first_knife)
     policy=None
     if args.train or args.policy:
         from stable_baselines3 import PPO
@@ -44,7 +46,7 @@ def main():
             policy.save(args.output/'policy')
             (args.output/'training.json').write_text(json.dumps(dict(steps=policy.num_timesteps,seed=0,
                 algorithm='PPO',actions='three finger pressure residuals; thumb/little parked; plus shared phase rate',
-                wrist_retreat_mm=args.wrist_retreat_mm,wrist_lift_mm=args.wrist_lift_mm,pip_guard=args.pip_guard,hand_gain_multiplier=2.5 if args.pip_guard or args.curl_release else 1.0,continuous_knife=args.continuous_knife,regrasp_speed=args.regrasp_speed,knife_gap_mm=args.knife_gap_mm,cut_depth_mm=args.cut_depth_mm,support_repeats=args.support_repeats,early_pip_curl=args.early_pip_curl,landing_wrist_retreat_mm=args.landing_wrist_retreat_mm,curl_release=args.curl_release,smooth_regrasp=args.smooth_regrasp,angle_gate_deg=args.angle_threshold_deg,angle_gate_contact_dwell_s=.06,cycles=args.cycles,contact_shift_m=.024,pressure_direction="world negative Z",external_disturbance=False,bottom_cut_m=.003,shape_randomization=False,privileged_actor=True,knife='close nonpenetrating shallow strokes',
+                wrist_retreat_mm=args.wrist_retreat_mm,wrist_lift_mm=args.wrist_lift_mm,pip_guard=args.pip_guard,hand_gain_multiplier=2.5 if args.pip_guard or args.curl_release else 1.0,hand_first_knife=args.hand_first_knife,no_knife_reverse=args.no_knife_reverse,continuous_knife=args.continuous_knife,regrasp_speed=args.regrasp_speed,knife_gap_mm=args.knife_gap_mm,cut_depth_mm=args.cut_depth_mm,support_repeats=args.support_repeats,early_pip_curl=args.early_pip_curl,landing_wrist_retreat_mm=args.landing_wrist_retreat_mm,curl_release=args.curl_release,smooth_regrasp=args.smooth_regrasp,angle_gate_deg=args.angle_threshold_deg,angle_gate_contact_dwell_s=.06,cycles=args.cycles,contact_shift_m=.024,pressure_direction="world negative Z",external_disturbance=False,bottom_cut_m=.003,shape_randomization=False,privileged_actor=True,knife='close nonpenetrating shallow strokes',
                 tactile='ideal MuJoCo contacts; no sensor noise model'),indent=2)+'\n')
         else:policy=PPO.load(args.policy,env=env)
     reports=[];capture=None
@@ -93,12 +95,19 @@ def main():
 
     def lines(i):
         x=metrics[i]
+        knife_status='No external push'
+        if env.hand_first_knife:
+            if x['phase'] in ('TRIO_LIFT','TRIO_RETREAT','TRIO_PLACE') or (x['phase']=='HOLD_END' and not x['knife_follow_released']):
+                knife_status='Knife: WAIT FOR LEFT HAND'
+            elif x['phase']=='HOLD_END' and not x['knife_follow_done']:
+                knife_status='Knife: FOLLOW LEFT HAND'
+            else:knife_status='Knife: READY / GUIDE'
         return [f'CYCLE {x["cycle"]}/{x["total_cycles"]} | {label} | {x["phase"]} | SUPPORT {x["support_repeats_completed"]}/{x["support_repeats"]}',
             f'Potato drift {x["displacement_m"]*1000:.1f} mm | backward finger force {np.asarray(x["tip_forces_on_potato_n"])[:,1].sum():.2f} N',
             'Tip N [thumb index middle ring little]: '+' '.join(f'{v:.2f}' for v in x['tip_loads_n']),
             f'PIP forward from phase start: {max(x["pip_forward_mm"]):.2f} mm | knife gap {x["knife_hand_gap_m"]*1000:.1f} mm',
             'Middle bone deg [index middle ring]: '+', '.join(f'{v:.1f}' for v in x['middle_angles_deg'])+f' | gate {env.angle_threshold_deg:g} deg / 60 ms',
-            'No external push | gate '+('TRIGGERED' if any(g['cycle']==x['cycle'] for g in x['angle_gate_events']) else 'ARMED')+' | rigid potato']
+            knife_status+' | gate '+('TRIGGERED' if any(g['cycle']==x['cycle'] for g in x['angle_gate_events']) else 'ARMED')+' | rigid potato']
     if args.export:
         import imageio.v2 as imageio
         from PIL import Image,ImageDraw
