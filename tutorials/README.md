@@ -10,6 +10,7 @@
 6. [Tianji 真机](tianji_hardware.md)
 7. [Wuji 真机](wuji_hardware.md)
 8. [完整真机实验索引](hardware/README.md)
+9. [土豆连续倒手 V1 设计与复现](../docs/agent/simulation/potato-regrasp-v1.md)（[历史试验记录](potato_tactile.md)）
 
 所有命令从仓库根目录运行。第一次接触项目请从 headless 仿真开始；真机章节中的帮助和
 离线预检不等于实际运动许可。ROS 2 暂未接入本教程。
