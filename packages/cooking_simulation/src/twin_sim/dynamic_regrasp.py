@@ -31,7 +31,7 @@ def knife_food_vertical_clearance(model, data, blade, potato):
     return float(bounds[0][0]-bounds[1][1])
 
 
-def add_close_knife_reference(plan, gap_m=.003, cut_repeats=2):
+def add_close_knife_reference(plan, gap_m=.003, cut_repeats=2, cut_depth_m=.018, continuous_knife=False):
     m, d = plan.model, mujoco.MjData(plan.model)
     sim = SimulationModel(m, d, SimulationModel._arm_indices(m, LEFT_ARM),
                           SimulationModel._arm_indices(m, RIGHT_ARM), SimulationModel._hand_indices(m))
@@ -55,8 +55,8 @@ def add_close_knife_reference(plan, gap_m=.003, cut_repeats=2):
         # Lower blade so its flat face overlaps the guiding knuckles; make two
         # shallow down/up strokes, stopping above the uncut rigid potato.
         fraction = np.clip((i-active[0])/max(1,len(active)-1), 0, 1)
-        stroke = .018*np.sin(cut_repeats*np.pi*fraction)**2 if phase in ('CUT_ADVANCE',) or ('CUT_ADVANCE' not in plan.phases and phase=='KNUCKLE_BACK') else 0.
-        clear = np.clip((i-retract_end)/30, 0, 1)
+        stroke = cut_depth_m*np.sin(cut_repeats*np.pi*fraction)**2 if phase in ('CUT_ADVANCE',) or ('CUT_ADVANCE' not in plan.phases and phase=='KNUCKLE_BACK') else 0.
+        clear = 0.0 if continuous_knife else np.clip((i-retract_end)/30, 0, 1)
         target[2, 3] += .367-center_z-stroke+.045*clear
         target[1, 3] += .005*fraction-.035*clear
         if clear > 0:
@@ -103,19 +103,20 @@ def park_auxiliary_fingers(plan):
     return plan
 
 
-def build_continuous_regrasp(cycles=3, contact_shift_m=.024, angle_gate=True, pip_guard=False, wrist_lift_m=0.0, wrist_retreat_m=0.0, smooth_regrasp=False, angle_threshold_deg=85.0, curl_release=False, early_pip_curl=False, support_repeats=1):
+def build_continuous_regrasp(cycles=3, contact_shift_m=.024, angle_gate=True, pip_guard=False, wrist_lift_m=0.0, wrist_retreat_m=0.0, smooth_regrasp=False, angle_threshold_deg=85.0, curl_release=False, early_pip_curl=False, support_repeats=1, knife_gap_m=None, cut_depth_m=.018, continuous_knife=False):
     """Sequential slicing references with continuous wrist/knife transitions."""
     if not isinstance(cycles,int) or not 1 <= cycles <= 3:
         raise ValueError('cycles must be an integer from 1 to 3 for the current potato')
     parts=[add_close_knife_reference(park_auxiliary_fingers(build_finger_regrasp_preview(
         bottom_cut_m=.003, fingertip_back_shift_m=contact_shift_m+.008*k,
-        palm_lift_m=.016 if k==0 else .017, angle_gate=angle_gate,pip_guard=pip_guard,wrist_lift_m=wrist_lift_m,wrist_retreat_m=wrist_retreat_m,smooth_regrasp=smooth_regrasp,curl_release=curl_release,early_pip_curl=early_pip_curl,support_repeats=support_repeats)),gap_m=.006 if curl_release else .003,cut_repeats=support_repeats if support_repeats>1 else 2) for k in range(cycles)]
+        palm_lift_m=.016 if k==0 else .017, angle_gate=angle_gate,pip_guard=pip_guard,wrist_lift_m=wrist_lift_m,wrist_retreat_m=wrist_retreat_m,smooth_regrasp=smooth_regrasp,curl_release=curl_release,early_pip_curl=early_pip_curl,support_repeats=support_repeats)),gap_m=(.006 if curl_release else .003) if knife_gap_m is None else knife_gap_m,cut_repeats=support_repeats if support_repeats>1 else 2,cut_depth_m=cut_depth_m,continuous_knife=continuous_knife) for k in range(cycles)]
     if angle_gate:
         for part in parts:
             # No auxiliary fingers are used: their former setup/release waits
             # serve no purpose. Keep the final seating hold in each round.
             removed=['HELPERS_CLEAR_WAIT','POST_PLACE_HOLD']
             if smooth_regrasp:removed.append('PRE_LIFT_HOLD')
+            if continuous_knife:removed.append('KNIFE_CLEAR')
             keep=~np.isin(part.phases,removed)
             part.qpos=part.qpos[keep];part.phases=tuple(np.asarray(part.phases)[keep])
     plan=parts[0];m=plan.model
@@ -129,7 +130,8 @@ def build_continuous_regrasp(cycles=3, contact_shift_m=.024, angle_gate=True, pi
         if cycle:
             first=states[-1].copy();next_pose=part.qpos[0].copy()
             wrist_ready=next_pose.copy();wrist_ready[right]=first[right]
-            for label,a,b in [('WRIST_FOLLOW',first,wrist_ready),('KNIFE_APPROACH',wrist_ready,next_pose)]:
+            transitions=[('WRIST_FOLLOW',first,next_pose)] if continuous_knife else [('WRIST_FOLLOW',first,wrist_ready),('KNIFE_APPROACH',wrist_ready,next_pose)]
+            for label,a,b in transitions:
                 for t in np.linspace(0,1,61)[1:]:
                     alpha=t*t*(3-2*t)
                     states.append((1-alpha)*a+alpha*b);phases.append(label);cycle_ids.append(cycle)
@@ -142,6 +144,18 @@ def build_continuous_regrasp(cycles=3, contact_shift_m=.024, angle_gate=True, pi
             for alpha in np.linspace(0,1,count+1)[1:]:
                 smooth_states.append((1-alpha)*a+alpha*b);smooth_phases.append(phase);smooth_cycles.append(cycle)
         states,phases,cycle_ids=smooth_states,smooth_phases,smooth_cycles
+    if continuous_knife:
+        initial_data=mujoco.MjData(m);initial_data.qpos[:]=states[0]
+        initial_sim=SimulationModel(m,initial_data,SimulationModel._arm_indices(m,LEFT_ARM),SimulationModel._arm_indices(m,RIGHT_ARM),SimulationModel._hand_indices(m))
+        initial_ik=Kinematics(initial_sim,initial_sim.right,'right_tool_tip_site')
+        pose=initial_ik.fk(states[0][right]);pose[1,3]-=.035;pose[2,3]+=.025
+        solution=initial_ik.ik(pose,states[0][right],tolerance=1e-6)
+        if not solution.success:raise ValueError('Initial knife approach unreachable')
+        first=states[0].copy();first[right]=solution.joints_rad
+        prefix=[]
+        for u in np.linspace(0,1,51)[:-1]:
+            a=u*u*u*(10-15*u+6*u*u);prefix.append((1-a)*first+a*states[0])
+        states=prefix+states;phases=['INITIAL_APPROACH']*len(prefix)+phases;cycle_ids=[0]*len(prefix)+cycle_ids
     plan.qpos=np.asarray(states);plan.phases=tuple(phases);plan.times_s=np.arange(len(states))*.02
     plan.cycle_ids=np.asarray(cycle_ids)
     # Recompute geometry for the actual joined references, including transitions.
@@ -168,8 +182,14 @@ class DynamicRegraspEnv(gym.Env):
     Privileged geometry/state is available to the actor. This is a research
     baseline, not a validated cutting policy; blade remains above the potato.
     """
-    def __init__(self, disturbance=False, tactile_enabled=True, contact_shift_m=.024, cycles=3, angle_gate=True, pip_guard=False, wrist_lift_m=0.0, wrist_retreat_m=0.0, smooth_regrasp=False, angle_threshold_deg=85.0, curl_release=False, landing_wrist_retreat_m=0.0, early_pip_curl=False, support_repeats=1):
-        self.plan = build_continuous_regrasp(cycles,contact_shift_m,angle_gate,pip_guard,wrist_lift_m,wrist_retreat_m,smooth_regrasp,angle_threshold_deg,curl_release,early_pip_curl,support_repeats)
+    def __init__(self, disturbance=False, tactile_enabled=True, contact_shift_m=.024, cycles=3, angle_gate=True, pip_guard=False, wrist_lift_m=0.0, wrist_retreat_m=0.0, smooth_regrasp=False, angle_threshold_deg=85.0, curl_release=False, landing_wrist_retreat_m=0.0, early_pip_curl=False, support_repeats=1, knife_gap_m=None, cut_depth_m=.018, regrasp_speed=1.0, continuous_knife=False):
+        if not 1 <= regrasp_speed <= 2 or not .001 <= cut_depth_m <= .030:
+            raise ValueError('regrasp_speed must be 1–2; cut depth 1–30 mm')
+        self.knife_gap_m=(.006 if curl_release else .003) if knife_gap_m is None else float(knife_gap_m)
+        if not .002 <= self.knife_gap_m <= .010:raise ValueError('knife gap must be 2–10 mm')
+        self.continuous_knife=continuous_knife
+        self.regrasp_speed=regrasp_speed
+        self.plan = build_continuous_regrasp(cycles,contact_shift_m,angle_gate,pip_guard,wrist_lift_m,wrist_retreat_m,smooth_regrasp,angle_threshold_deg,curl_release,early_pip_curl,support_repeats,self.knife_gap_m,cut_depth_m,continuous_knife)
         if not 0 <= landing_wrist_retreat_m <= .004 or (landing_wrist_retreat_m and not curl_release):
             raise ValueError("landing wrist retreat requires curl_release and must be 0–4 mm")
         self.landing_wrist_retreat_m=landing_wrist_retreat_m
@@ -193,6 +213,10 @@ class DynamicRegraspEnv(gym.Env):
             m.actuator_biasprm[main_acts,1]*=2.5
             m.actuator_biasprm[main_acts,2]*=np.sqrt(2.5)
         self.data = mujoco.MjData(m)
+        if continuous_knife:
+            self.knife_tracking_data=mujoco.MjData(m)
+            self.knife_tracking_sim=SimulationModel(m,self.knife_tracking_data,SimulationModel._arm_indices(m,LEFT_ARM),SimulationModel._arm_indices(m,RIGHT_ARM),SimulationModel._hand_indices(m))
+            self.knife_tracking_ik=Kinematics(self.knife_tracking_sim,self.knife_tracking_sim.right,'right_tool_tip_site')
         self.qids = m.jnt_qposadr[m.actuator_trnid[:,0]]
         self.dids = m.jnt_dofadr[m.actuator_trnid[:,0]]
         self.pbody = m.body('potato').id
@@ -295,7 +319,9 @@ class DynamicRegraspEnv(gym.Env):
         frame=min(int(self.clock/.02),len(self.plan.phases)-1)
         cycle=int(self.plan.cycle_ids[frame])
         completed_support=int(np.sum(frame>=self.support_ends[cycle])) if self.support_repeats>1 else int(cycle in self.gate_released)
-        return dict(support_repeats=self.support_repeats,support_repeats_completed=completed_support,
+        pip_geoms=[m.geom(f'left_finger{f}_link3_collision').id for f in (2,3,4)]
+        pip_gap=min(mujoco.mj_geomDistance(m,d,self.blade,g,.1,None) for g in pip_geoms)
+        return dict(knife_pip_gap_m=float(pip_gap),regrasp_speed=self.regrasp_speed,support_repeats=self.support_repeats,support_repeats_completed=completed_support,
                     main_tip_positions_m=[d.geom_xpos[self.pads[f]].tolist() for f in (1,2,3)],
                     pip_positions_m=[d.xanchor[m.joint(f"left_finger{f}_joint3").id].tolist() for f in (2,3,4)],
                     middle_angles_deg=angles,angle_gate_threshold_deg=self.angle_threshold_deg,
@@ -359,9 +385,10 @@ class DynamicRegraspEnv(gym.Env):
             mujoco.mj_fwdPosition(self.model,scratch)
             for _ in range(8):
                 gap=min(mujoco.mj_geomDistance(self.model,scratch,self.blade,g,.1,None) for g in self.hand_geoms)
-                if gap>=.0059:break
+                close_enough=abs(gap-self.knife_gap_m)<.0001 if self.continuous_knife else gap>=self.knife_gap_m-.0001
+                if close_enough:break
                 joints=scratch.qpos[sim.right.qpos_ids].copy()
-                target=knife_ik.fk(joints);target[1,3]+=gap-.006
+                target=knife_ik.fk(joints);target[1,3]+=gap-self.knife_gap_m
                 result=knife_ik.ik(target,joints,tolerance=1e-6)
                 if not result.success:raise ValueError('Retargeted knife clearance unreachable')
                 scratch.qpos[sim.right.qpos_ids]=result.joints_rad
@@ -411,6 +438,22 @@ class DynamicRegraspEnv(gym.Env):
                 command[ids]=np.minimum(np.minimum(command[ids],self.extension_limits),d.qpos[self.qids[ids]])
                 self.extension_limits=command[ids].copy()
             else:self.extension_limits=None
+        if self.continuous_knife and self.plan.phases[index]!='INITIAL_APPROACH':
+            scratch=self.knife_tracking_data;sim=self.knife_tracking_sim;ik=self.knife_tracking_ik
+            scratch.qpos[:]=d.qpos;scratch.qpos[self.qids]=command
+            right=sim.right.qpos_ids
+            joints=scratch.qpos[right].copy();target=ik.fk(joints)
+            for _ in range(12):
+                mujoco.mj_fwdPosition(m,scratch)
+                gap=min(mujoco.mj_geomDistance(m,scratch,self.blade,g,.1,None) for g in self.hand_geoms)
+                if abs(gap-self.knife_gap_m)<.0001:break
+                target[1,3]+=gap-self.knife_gap_m
+                solved=ik.ik(target,joints,tolerance=1e-6)
+                if not solved.success:raise ValueError('Continuous knife tracking unreachable')
+                joints=solved.joints_rad;scratch.qpos[right]=joints
+            else:raise ValueError('Continuous knife tracking failed')
+            acts=sim.right.actuator_ids
+            command[acts]=np.clip(joints,m.actuator_ctrlrange[acts,0],m.actuator_ctrlrange[acts,1])
         d.ctrl[:]=command
         maxknife=0.;maxpenetration=0.;maxhelper=0.
         if self.disturbance and self.push_onset is None and self.clock >= self.push_start:
@@ -434,7 +477,8 @@ class DynamicRegraspEnv(gym.Env):
                     wrench=np.zeros(6);mujoco.mj_contactForce(m,d,ci,wrench);maxknife=max(maxknife,float(wrench[0]))
         d.xfrc_applied[self.pbody]=0
         previous_clock=self.clock
-        next_clock=min(self.plan.times_s[-1],self.clock+.02*(1+.3*action[-1]))
+        phase_speed=self.regrasp_speed if self.plan.phases[index] in ('TRIO_LIFT','TRIO_RETREAT','TRIO_PLACE') else 1.0
+        next_clock=min(self.plan.times_s[-1],self.clock+.02*phase_speed*(1+.3*action[-1]))
         cycle=int(self.plan.cycle_ids[index])
         if self.angle_gate_enabled and cycle not in self.gate_released:
             gate_time=self.plan.times_s[self.gate_last[cycle]]

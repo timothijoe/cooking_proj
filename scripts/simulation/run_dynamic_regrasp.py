@@ -16,6 +16,10 @@ def main():
     parser.add_argument('--train',type=int,default=0,metavar='STEPS')
     parser.add_argument('--policy',type=Path)
     parser.add_argument('--cycles',type=int,default=3,choices=(1,2,3))
+    parser.add_argument('--continuous-knife',action='store_true')
+    parser.add_argument('--regrasp-speed',type=float,default=1.)
+    parser.add_argument('--knife-gap-mm',type=float)
+    parser.add_argument('--cut-depth-mm',type=float,default=18.)
     parser.add_argument('--support-repeats',type=int,choices=(1,2,3),default=1)
     parser.add_argument('--early-pip-curl',action='store_true')
     parser.add_argument('--landing-wrist-retreat-mm',type=float,default=0.)
@@ -29,7 +33,7 @@ def main():
     parser.add_argument('--export',action='store_true')
     parser.add_argument('--output',type=Path,default=local_root()/'outputs/potato/dynamic_regrasp_restored')
     args=parser.parse_args();args.output.mkdir(parents=True,exist_ok=True)
-    env=DynamicRegraspEnv(disturbance=False,cycles=args.cycles,pip_guard=args.pip_guard,wrist_lift_m=args.wrist_lift_mm/1000,wrist_retreat_m=args.wrist_retreat_mm/1000,smooth_regrasp=args.smooth_regrasp,angle_threshold_deg=args.angle_threshold_deg,curl_release=args.curl_release,landing_wrist_retreat_m=args.landing_wrist_retreat_mm/1000,early_pip_curl=args.early_pip_curl,support_repeats=args.support_repeats)
+    env=DynamicRegraspEnv(disturbance=False,cycles=args.cycles,pip_guard=args.pip_guard,wrist_lift_m=args.wrist_lift_mm/1000,wrist_retreat_m=args.wrist_retreat_mm/1000,smooth_regrasp=args.smooth_regrasp,angle_threshold_deg=args.angle_threshold_deg,curl_release=args.curl_release,landing_wrist_retreat_m=args.landing_wrist_retreat_mm/1000,early_pip_curl=args.early_pip_curl,support_repeats=args.support_repeats,regrasp_speed=args.regrasp_speed,knife_gap_m=None if args.knife_gap_mm is None else args.knife_gap_mm/1000,cut_depth_m=args.cut_depth_mm/1000,continuous_knife=args.continuous_knife)
     policy=None
     if args.train or args.policy:
         from stable_baselines3 import PPO
@@ -40,7 +44,7 @@ def main():
             policy.save(args.output/'policy')
             (args.output/'training.json').write_text(json.dumps(dict(steps=policy.num_timesteps,seed=0,
                 algorithm='PPO',actions='three finger pressure residuals; thumb/little parked; plus shared phase rate',
-                wrist_retreat_mm=args.wrist_retreat_mm,wrist_lift_mm=args.wrist_lift_mm,pip_guard=args.pip_guard,hand_gain_multiplier=2.5 if args.pip_guard or args.curl_release else 1.0,support_repeats=args.support_repeats,early_pip_curl=args.early_pip_curl,landing_wrist_retreat_mm=args.landing_wrist_retreat_mm,curl_release=args.curl_release,smooth_regrasp=args.smooth_regrasp,angle_gate_deg=args.angle_threshold_deg,angle_gate_contact_dwell_s=.06,cycles=args.cycles,contact_shift_m=.024,pressure_direction="world negative Z",external_disturbance=False,bottom_cut_m=.003,shape_randomization=False,privileged_actor=True,knife='close nonpenetrating shallow strokes',
+                wrist_retreat_mm=args.wrist_retreat_mm,wrist_lift_mm=args.wrist_lift_mm,pip_guard=args.pip_guard,hand_gain_multiplier=2.5 if args.pip_guard or args.curl_release else 1.0,continuous_knife=args.continuous_knife,regrasp_speed=args.regrasp_speed,knife_gap_mm=args.knife_gap_mm,cut_depth_mm=args.cut_depth_mm,support_repeats=args.support_repeats,early_pip_curl=args.early_pip_curl,landing_wrist_retreat_mm=args.landing_wrist_retreat_mm,curl_release=args.curl_release,smooth_regrasp=args.smooth_regrasp,angle_gate_deg=args.angle_threshold_deg,angle_gate_contact_dwell_s=.06,cycles=args.cycles,contact_shift_m=.024,pressure_direction="world negative Z",external_disturbance=False,bottom_cut_m=.003,shape_randomization=False,privileged_actor=True,knife='close nonpenetrating shallow strokes',
                 tactile='ideal MuJoCo contacts; no sensor noise model'),indent=2)+'\n')
         else:policy=PPO.load(args.policy,env=env)
     reports=[];capture=None

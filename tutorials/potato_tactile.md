@@ -1,4 +1,38 @@
-## 当前版本：每个接触位置支撑退腕 3 次，再移指
+## 当前版本：初始化后刀持续贴近关节
+
+新增可选 `--continuous-knife`。只在最开头加入一次 `INITIAL_APPROACH`：刀从前方约 35 mm、上方约 25 mm 的偏移姿态平滑靠近。随后取消每轮 `KNIFE_CLEAR` 的前退/抬高，也取消轮间独立 `KNIFE_APPROACH` 阶段。刀保留切菜下刀、提刀行程，抬指和后移时继续跟随 PIP 区域。
+
+参考轨迹和角度触发后的重新求解都保持刀近距；每个控制步另用独立 scratch data，针对当步手指控制目标求解刀的前后位置。实际模拟仍使用有限力驱动器，未覆盖真实 qpos、未禁用碰撞。初始化阶段不施加近距跟随，后续全部阶段施加。
+
+沿用相同 PPO 的三轮实测：初始化结束后的刀与 PIP link3 碰撞区域间隙始终约 2.11–4.22 mm；切菜期间约 2.14–3.17 mm，抬指/落指时略增但不再整段退开。刀手接触力为零，刀与刚体土豆最小竖直间隙 2.64 mm。三个位置各三次支撑下刀，三轮均重新按稳，土豆最大位移 3.21 mm。零残差基准位移 7.81 mm，未通过稳定目标；本次未重新训练。
+
+输出 `local/outputs/potato/dynamic_regrasp_continuous_knife/`，逐阶段刀手间隙见 `knife_follow_metrics.json`。新增测试检查一次初始化、无中途退刀阶段及实际动力学全程近距、无过大刀手力。
+
+```bash
+MUJOCO_GL=egl OMP_NUM_THREADS=1 .venv/bin/python scripts/simulation/run_dynamic_regrasp.py --policy local/outputs/potato/dynamic_regrasp_angle_gate/policy.zip --wrist-retreat-mm 4 --smooth-regrasp --angle-threshold-deg 80 --curl-release --landing-wrist-retreat-mm 4 --early-pip-curl --support-repeats 3 --regrasp-speed 1.6 --knife-gap-mm 3 --cut-depth-mm 24 --continuous-knife --output local/outputs/potato/dynamic_regrasp_continuous_knife --export
+```
+
+修改前源码在 `local/checkpoints/20260918-before-continuous-knife/source.tar.gz`，旧回放保留。不带新参数仍可运行上一版。
+
+---
+
+## 历史版本：倒手提速，刀贴近 PIP 区域展示切菜过程
+
+修改前用户已提交为 `2364d98`，旧参数和旧回放保留。本轮添加可选参数，默认行为不变：`--regrasp-speed 1.6` 只提高三指抬起/后移/落下的参考时钟速度，物理步长和视频播放速度不变；每个位置三次支撑下刀的节奏保留。`--knife-gap-mm 3` 将参考刀手间隙从 6 mm 收紧至 3 mm，`--cut-depth-mm 24` 将刀的竖直行程由 18 mm 加深到 24 mm，仍保留不穿入土豆的几何间隙。
+
+实测同一 PPO 三轮均重新按稳，移指总时间从 4.70 秒降到 2.96 秒，整段从 22.66 秒降到 20.92 秒；土豆最大位移 3.24 mm。支撑下刀期间，刀与 PIP 相关中节碰撞几何间隙约 1.70–2.72 mm（中位 2.23 mm），全过程刀手接触力为零，刀距土豆最小竖直间隙 2.62 mm。支撑阶段三指最大世界位置偏移 0.942 mm，持续有接触。此处的 PIP 间隙指 link3 碰撞胶囊区域，非理想关节点距离。
+
+本次沿用现有 PPO，未重新训练。零残差三轮位移约 8.64 mm，不满足稳定目标。刀仍不切断刚体土豆，没有生成真实分离的土豆片；当前展示三次下刀、提刀、固定指尖退腕、快速移指的完整动作顺序。
+
+```bash
+MUJOCO_GL=egl OMP_NUM_THREADS=1 .venv/bin/python scripts/simulation/run_dynamic_regrasp.py --policy local/outputs/potato/dynamic_regrasp_angle_gate/policy.zip --wrist-retreat-mm 4 --smooth-regrasp --angle-threshold-deg 80 --curl-release --landing-wrist-retreat-mm 4 --early-pip-curl --support-repeats 3 --regrasp-speed 1.6 --knife-gap-mm 3 --cut-depth-mm 24 --output local/outputs/potato/dynamic_regrasp_fast_close_cut --export
+```
+
+新测试验证实际移指控制步数减少、支撑步数和次数不变、刀手/刀食物间隙与物理接触检查，而非仅改变视频播放速度。
+
+---
+
+## 已提交版本：每个接触位置支撑退腕 3 次，再移指
 
 新增 `--support-repeats 3`（支持 1/2/3，默认 1 保持旧版）。每个接触位置分三次小幅退腕，每次 40 个参考移动采样加 20 个支撑采样；指尖世界目标在整个支撑段固定。刀在该段对应做三次不切入土豆的浅行程。三次全部完成后，还必须满足实际角度 ≥80°和三指接触持续 60 ms，才允许移指；不再因第一次就达到角度而提前跳走。
 
