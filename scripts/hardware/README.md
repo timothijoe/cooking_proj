@@ -1,7 +1,9 @@
 # Hardware scripts
 
-此目录预留给稳定的真机 shell 包装；当前推荐入口安装为 Python 模块和 `wuji-*` 命令，而
-不是直接运行本目录的文件。
+此目录保存稳定的真机脚本入口。UART 压力传感器采集工具为
+`sensor_uart_stream.py`；其操作说明见
+[`tutorials/hardware/sensor_uart_stream.md`](../../tutorials/hardware/sensor_uart_stream.md)。
+其余推荐入口安装为 Python 模块和 `wuji-*` 命令。
 
 先创建 `.venv-hardware`：
 

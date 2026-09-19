@@ -88,12 +88,12 @@
 
 | 脚本 | 行为 | 教程 |
 |---|---|---|
-| `sensor_uart_stream.py` | 默认 dry-run；`--execute` 打开 `/dev/ttyUSB0`、发送采集指令并显示二维压力热力图 | [UART 压力传感器](sensor_uart_stream.md) |
+| `scripts/hardware/sensor_uart_stream.py` | 默认 dry-run；`--execute` 打开 `/dev/ttyUSB0`、发送采集指令并显示二维压力热力图 | [UART 压力传感器](sensor_uart_stream.md) |
 
 当前现场观察可使用下列命令；`--heatmap-vmax 2` 是临时显示上限，并非量程：
 
 ```bash
-.venv-hardware/bin/python sensor_uart_stream.py \
+.venv-hardware/bin/python scripts/hardware/sensor_uart_stream.py \
   --execute --port /dev/ttyUSB0 --baudrate 115200 \
   --heatmap-vmin 0 --heatmap-vmax 2
 ```
