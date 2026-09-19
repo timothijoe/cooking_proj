@@ -1,5 +1,7 @@
 # 仿真文档
 
+- **[土豆倒手当前进展与开发交接](../../../README_REGRASP.md)**：当前实现、RL/程序分工、运行方式和未完成项（2026-09-19）。
+
 - [章程](charter.md)：稳定边界和完成标准
 - [当前状态](current.md)：能力与验证索引
 - 纪传体：[MuJoCo 运行时](evolution/mujoco-runtime.md)、[护手切菜](evolution/guarded-chopping.md)、[Wuji Hand 仿真](evolution/wuji-hand-simulation.md)
@@ -10,7 +12,7 @@
 
 - [下一阶段：形状适配、抗扰 RL 与 sim2real](potato-regrasp-rl-sim2real-next.md)：设计提议与待确认的硬件条件，尚未实现
 
-- [当前下一步：独立倒手微技能环境设计](regrasp-microskill-env-design.md)：只做倒手、按钮触发、实时执行与 sim2real 接口；设计稿，尚未实现
+- [当前下一步：独立倒手微技能环境设计](regrasp-microskill-env-design.md)：只做倒手、按钮触发、实时执行与 sim2real 接口；已有参考环境与首轮残差 PPO，部分接口仍待实现
 
 - [独立倒手参考环境：运行、验证与当前限制](regrasp-microskill-reference.md)
 
